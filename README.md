@@ -9,18 +9,16 @@ server inside an application which itself isn't necessary primarily a
 web app, while avoiding adding any new dependencies on the classpath
 (apart from ring-core). It could also be used for tests.
 
-HTTP only for now. Untested.
-
 ## Usage
 
 ``` clojure
 (require 'ring-http-exchange.core)
 
 (ring-http-exchange.core/run-http-server
-  (fn [request]
+  (fn [_]
     {:status 200
-     :headers {"Content-Type" "text/plain"}
-     :body "Hello World"}
+     :headers {"Content-Type" "text/html; charset=utf-8"}
+     :body "hello world"})
   {:port 8080})
 ```
 
