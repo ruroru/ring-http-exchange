@@ -8,7 +8,7 @@
 
   :profiles {:test {:resource-paths ["test-resources"]
                     :dependencies   [
-                                     [compojure "1.1.8"]
+                                     [compojure "1.7.1"]
                                      [babashka/fs "0.5.22"]
                                      [clj-http "3.13.0"]
                                      ]}}
