@@ -1,13 +1,26 @@
-name: CI
-
+name: ci
 on:
   push:
   pull_request:
-
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  test-jvm:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+        java_version: [ '21' ]
+        java: [ 'zulu' ]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Run tests
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Prepare java
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ matrix.java }}
+          java-version: ${{ matrix.java_version }}
+      - name: Install clojure tools
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          lein: 2.9.1
+      - name: Run unit tests
         run: lein test

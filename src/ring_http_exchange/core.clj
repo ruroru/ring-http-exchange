@@ -1,12 +1,12 @@
 (ns ring-http-exchange.core
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [ring-http-exchange.ssl :as ssl]
+            [clojure.tools.logging :as logger]
             [ring.core.protocols :as protocols])
-  (:import [com.sun.net.httpserver HttpServer HttpHandler HttpExchange HttpsConfigurator HttpsExchange HttpsServer]
-           [java.io ByteArrayOutputStream File PrintWriter]
-           [java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit]
-           [java.net InetSocketAddress]))
+  (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsExchange HttpsServer)
+           (java.io ByteArrayOutputStream File)
+           (java.net InetSocketAddress)
+           (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
 
 (set! *warn-on-reflection* true)
 
@@ -47,65 +47,55 @@
                     (string? v) vector)]
     (.add response-headers (name k) v)))
 
-(def ^{:private true} error-page-template
-  (str "<html><head><title>%s</title></head>"
-       "<body><h1>%s</h1><pre>%s</pre></body></html>"))
+(defn- handle-exchange [^HttpExchange exchange handler function]
+  (let [output-buffer-size 32768]
+    (with-open [exchange exchange]
+      (try
+        (let [{:keys [status body headers]
+               :as   response} (-> exchange function handler)
+              out (.getResponseBody exchange)]
+          (set-response-headers exchange headers)
+          (cond
+            (= "chunked" (get headers "transfer-encoding"))
+            (do (.sendResponseHeaders exchange status 0)
+                (protocols/write-body-to-stream body response out))
 
-(defn- handle-exception [^HttpExchange exchange ^Throwable t]
-  (let [title "Internal Server Error"
-        trace (with-out-str
-                (.printStackTrace t (PrintWriter. *out*)))
-        page (-> (format error-page-template title title trace)
-                 (.getBytes "UTF-8"))]
-    (.set (.getResponseHeaders exchange) "content-type" "text/html")
-    (.sendResponseHeaders exchange 500 (alength page))
-    (io/copy page (.getResponseBody exchange))))
+            (string? body)
+            (let [bytes (.getBytes ^String body "UTF-8")]
+              (.sendResponseHeaders exchange status (alength bytes))
+              (io/copy bytes out))
 
-(defn- handle-exchange [^HttpExchange exchange handler
-                        {:keys [output-buffer-size]
-                         :or   {output-buffer-size 32768}}
-                        function]
-  (with-open [exchange exchange]
-    (try
-      (let [{:keys [status body headers]
-             :as   response} (-> exchange function handler)
-            out (.getResponseBody exchange)]
-        (set-response-headers exchange headers)
-        (cond
-          (= "chunked" (get headers "transfer-encoding"))
-          (do (.sendResponseHeaders exchange status 0)
-              (protocols/write-body-to-stream body response out))
+            (instance? File body)
+            (do (.sendResponseHeaders exchange status (.length ^File body))
+                (protocols/write-body-to-stream body response out))
+            :else
+            (let [baos (ByteArrayOutputStream. output-buffer-size)]
+              (protocols/write-body-to-stream body response baos)
+              (.sendResponseHeaders exchange status (.size baos))
+              (io/copy (.toByteArray baos) out))))
+        (catch Throwable t
+          (logger/error (.getMessage t))
+          (let [page (.getBytes "Internal Server Error" "UTF-8")]
+            (.set (.getResponseHeaders exchange) "content-type" "text/html")
+            (.sendResponseHeaders exchange 500 (alength page))
+            (io/copy page (.getResponseBody exchange))))
+        (finally
+          (.flush (.getResponseBody exchange)))))))
 
-          (string? body)
-          (let [bytes (.getBytes ^String body "UTF-8")]
-            (.sendResponseHeaders exchange status (alength bytes))
-            (io/copy bytes out))
-
-          (instance? File body)
-          (do (.sendResponseHeaders exchange status (.length ^File body))
-              (protocols/write-body-to-stream body response out))
-          :else
-          (let [baos (ByteArrayOutputStream. output-buffer-size)]
-            (protocols/write-body-to-stream body response baos)
-            (.sendResponseHeaders exchange status (.size baos))
-            (io/copy (.toByteArray baos) out))))
-      (catch Throwable t
-        (.printStackTrace t)
-        (handle-exception exchange t))
-      (finally
-        (.flush (.getResponseBody exchange))))))
+(defn- get-handler [handler exchange-function]
+  (proxy [HttpHandler] []
+    (handle [exchange]
+      (handle-exchange exchange handler exchange-function))))
 
 (defn- get-server
-  ([host port]
-   (HttpServer/create (InetSocketAddress. (str host) (int port)) 0))
-  ([host port ssl-context]
+  ([host port handler exchange-function]
+   (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)]
+     (.createContext server "/" (get-handler handler exchange-function))
+     server))
+  ([host port ssl-context handler exchange-function]
    (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
      (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-     server))
-  ([host port keystore key-password truststore trust-password]
-   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
-         ssl-context (ssl/keystore->ssl-context keystore key-password truststore trust-password)]
-     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+     (.createContext server "/" (get-handler handler exchange-function))
      server)))
 
 (defn stop-http-server
@@ -114,8 +104,7 @@
   ([server]
    (stop-http-server server 0))
   ([^HttpServer server delay]
-   (doto server
-     (.stop delay))))
+   (doto server (.stop delay))))
 
 (defn run-http-server
   "Start a com.sun.net.httpserver.HttpServer to serve the given
@@ -128,13 +117,8 @@
   :max-queued-requests  - the maximum number of requests to be queued (default 1024)
   :thread-idle-timeout  - Set the maximum thread idle time. Threads that are idle
                           for longer than this period may be stopped (default 60000)
-  :keystore             - keystore used in creation of ssl context
-  :key-password         - keystore password, that is used in ssl context
-  :truststore           - truststore used in creation of ssl context
-  :trust-password       - trust store password, that is used to create ssl contxt
-  :ssl?                 - flag to check if http or https server should be used
-  :ssl-port             - the https port to listen on (defaults to 8443)
-  :ssl-context          - the ssl context, that is used in https server"
+  :ssl-context          - the ssl context, that is used in https server
+  :executor             - executor to use in HttpServer, will default to ThreadPoolExecutor"
   [handler {:keys [
                    host
                    port
@@ -142,46 +126,29 @@
                    max-threads
                    max-queued-requests
                    thread-idle-timeout
-                   keystore
-                   key-password
-                   truststore
-                   trust-password
-                   ssl?
-                   ssl-port
                    ssl-context
+                   executor
                    ]
-            :as   options
-            :or   {host                "127.0.0.1" port 8080
-                   min-threads         8 max-threads 50
-                   max-queued-requests 1024 thread-idle-timeout 60000
-                   keystore            (io/resource "keystore.js")
-                   key-password        ""
-                   truststore          (io/resource "truststore.jks")
-                   trust-password      ""
-                   ssl?                false
-                   ssl-port            8443
-                   ssl-context         nil}}]
-  (let [^HttpServer server (if ssl?
-                             (if ssl-context
-                               (get-server host ssl-port ssl-context)
-                               (get-server host ssl-port keystore key-password truststore trust-password))
-                             (get-server host port))]
-
-    (if ssl?
-      (.createContext server "/" (proxy [HttpHandler] []
-                                   (handle [exchange]
-                                     (handle-exchange exchange handler options https-exchange->request-map))))
-      (.createContext server "/" (proxy [HttpHandler] []
-                                   (handle [exchange]
-                                     (handle-exchange exchange handler options http-exchange->request-map)))))
+            :or   {host                "127.0.0.1"
+                   port                8080
+                   min-threads         8
+                   max-threads         50
+                   max-queued-requests 1024
+                   thread-idle-timeout 60000
+                   ssl-context         nil
+                   executor            nil}}]
+  (let [^HttpServer server (if ssl-context
+                             (get-server host port ssl-context handler https-exchange->request-map)
+                             (get-server host port handler http-exchange->request-map))]
+    (if executor
+      (.setExecutor server executor)
+      (.setExecutor server (ThreadPoolExecutor. min-threads
+                                                max-threads
+                                                thread-idle-timeout
+                                                TimeUnit/MILLISECONDS
+                                                (ArrayBlockingQueue. max-queued-requests))))
     (try
-      (doto server
-        (.setExecutor (ThreadPoolExecutor. min-threads
-                                           max-threads
-                                           thread-idle-timeout
-                                           TimeUnit/MILLISECONDS
-                                           (ArrayBlockingQueue. max-queued-requests)))
-        .start)
+      (doto server .start)
       (catch Throwable t
         (stop-http-server server)
         (throw t)))))
