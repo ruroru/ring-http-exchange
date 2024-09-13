@@ -9,11 +9,7 @@
     [ring-http-exchange.ssl :as ssl])
   (:import (java.util.concurrent Executors)))
 
-(defroutes app (GET "/" []
-                 (fn [req]
-                   (if (= "/error" (:uri req))
-                     (throw (Exception. "Internal error"))
-                     "hello world"))))
+(defroutes app (GET "/" [] "hello world"))
 
 (def default-password "password")
 
