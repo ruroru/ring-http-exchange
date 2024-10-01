@@ -8,7 +8,7 @@ which is included in the JDK.
 The main motivation for this is to support starting a small HTTP
 server inside an application which itself isn't necessary primarily a
 web app, while avoiding adding any new dependencies on the classpath
-(apart from ring-core). It could also be used for tests.
+(apart from ring-core).
 
 ## Usage
 
@@ -36,16 +36,16 @@ web app, while avoiding adding any new dependencies on the classpath
 
 ### Server configuration
 
-| Response Body Type    | Default value | Description                                                                              |
-|-----------------------|---------------|------------------------------------------------------------------------------------------|
-| `host`                | 127.0.0.1     | host name                                                                                |
-| `port`                | 8080          | application port                                                                         |
-| `executor`            | nil           | External Executor to be used, if none provided  ThreadPoolExecutor shall be used         |
-| `max-threads`         | 50            | Max threads for ThreadPoolExecutor                                                       |
-| `min-threads`         | 8             | Min threads for ThreadPoolExecutor                                                       |
-| `max-queued-requests` | 1024          | Max number of requests for ThreadPoolExecutor                                            |                                           
-| `thread-idle-timeout` | 60000         | Thread idle timeout in milliseconds for ThreadPoolExecutor, after which thread will stop |
-| `ssl-context`         | nil           | Ssl context to be used in https configurator                                             |
+| Property              | Description                                                                              | Default value |
+|-----------------------|------------------------------------------------------------------------------------------|---------------|
+| `host`                | Host name                                                                                | 127.0.0.1     | 
+| `port`                | Application port                                                                         | 8080          |
+| `executor`            | External Executor to be used, if none provided  ThreadPoolExecutor shall be used         | nil           |
+| `max-threads`         | Max threads for ThreadPoolExecutor                                                       | 50            |
+| `min-threads`         | Min threads for ThreadPoolExecutor                                                       | 8             |
+| `max-queued-requests` | Max number of requests for ThreadPoolExecutor                                            | 1024          |                                           
+| `thread-idle-timeout` | Thread idle timeout in milliseconds for ThreadPoolExecutor, after which thread will stop | 60000         |
+| `ssl-context`         | Ssl context to be used in https configurator                                             | nil           |
 
 ### Limitations
 
@@ -54,8 +54,6 @@ web app, while avoiding adding any new dependencies on the classpath
 * When the response body is `nil`, the `Transfer-Encoding` header will be automatically set to `chunked`
 
 ## License
-
-Copyright © 2017 Håkan Råberg
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
