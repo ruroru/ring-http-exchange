@@ -10,12 +10,11 @@
   :source-paths ["src/clojure"]
 
 
-  :profiles {:test {:resource-paths    ["test/resources"]
-                    :source-paths      ["test/clojure"]
-                    :dependencies      [
-                                        [compojure "1.7.1"]
-                                        [babashka/fs "0.5.22"]
-                                        [clj-http "3.13.0"]
-                                        ]}}
+  :profiles {:test {:resource-paths ["test/resources"]
+                    :source-paths   ["test/clojure"]
+                    :dependencies   [
+                                     [babashka/fs "0.5.22"]
+                                     [clj-http "3.13.0"]
+                                     ]}}
 
   :plugins [[lein-ancient "0.7.0"]])
