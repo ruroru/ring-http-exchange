@@ -3,20 +3,30 @@
             [clojure.string :as str]
             [clojure.tools.logging :as logger]
             [ring.core.protocols :as protocols])
-  (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsExchange HttpsServer)
-           (java.io ByteArrayOutputStream File)
+  (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsServer)
+           (java.io File InputStream)
            (java.net InetSocketAddress)
            (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
 
 (set! *warn-on-reflection* true)
 
-(defn- http-exchange->request-map [^HttpExchange exchange]
+(def ^:private https-schema :https)
+(def ^:private http-schema :http)
+(def ^:private byte-array-class (Class/forName "[B"))
+(def ^:private internal-server-error "Internal Server Error")
+(def ^:private content-type "content-type")
+(def ^:private content-length "Content-length")
+(def ^:private text-html "text/html")
+(def ^:private index-path "/")
+(def ^:private localhost "127.0.0.1")
+
+(defn- http-exchange->request-map [^HttpExchange exchange schema]
   {:server-port     (.getPort (.getLocalAddress exchange))
    :server-name     (.getHostName (.getLocalAddress exchange))
    :remote-addr     (.getHostString (.getRemoteAddress exchange))
    :uri             (.getPath (.getRequestURI exchange))
    :query-string    (.getQuery (.getRequestURI exchange))
-   :scheme          :http
+   :scheme          schema
    :request-method  (keyword (str/lower-case (.getRequestMethod exchange)))
    :protocol        (.getProtocol exchange)
    :headers         (->> (for [[k vs] (.getRequestHeaders exchange)]
@@ -25,77 +35,68 @@
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
 
-(defn- https-exchange->request-map [^HttpsExchange exchange]
-  {:server-port     (.getPort (.getLocalAddress exchange))
-   :server-name     (.getHostName (.getLocalAddress exchange))
-   :remote-addr     (.getHostString (.getRemoteAddress exchange))
-   :uri             (.getPath (.getRequestURI exchange))
-   :query-string    (.getQuery (.getRequestURI exchange))
-   :scheme          :https
-   :request-method  (keyword (str/lower-case (.getRequestMethod exchange)))
-   :protocol        (.getProtocol exchange)
-   :headers         (->> (for [[k vs] (.getRequestHeaders exchange)]
-                           [(str/lower-case k) (str/join "," vs)])
-                         (into {}))
-   :ssl-client-cert nil
-   :body            (.getRequestBody exchange)})
 
 (defn- set-response-headers [^HttpExchange exchange headers]
   (doseq [:let [response-headers (.getResponseHeaders exchange)]
-          [k v] headers
-          v (cond-> v
-                    (string? v) vector)]
-    (.add response-headers (name k) v)))
+          [header-key v] headers]
+    (.add response-headers (name header-key) (if (instance? String v)
+                                               v
+                                               (str v)))))
 
-(defn- handle-exchange [^HttpExchange exchange handler function]
-  (let [output-buffer-size 32768]
-    (with-open [exchange exchange]
-      (try
-        (let [{:keys [status body headers]
-               :as   response} (-> exchange function handler)
-              out (.getResponseBody exchange)]
-          (set-response-headers exchange headers)
-          (cond
-            (= "chunked" (get headers "transfer-encoding"))
-            (do (.sendResponseHeaders exchange status 0)
-                (protocols/write-body-to-stream body response out))
+(defn- handle-exchange [^HttpExchange exchange handler schema]
+  (with-open [exchange exchange]
+    (try
+      (let [request-map (http-exchange->request-map exchange schema)
+            {:keys [status body headers]
+             :as   response} (handler request-map)
+            out (.getResponseBody exchange)]
 
-            (string? body)
-            (let [bytes (.getBytes ^String body "UTF-8")]
-              (.sendResponseHeaders exchange status (alength bytes))
-              (io/copy bytes out))
+        (set-response-headers exchange headers)
 
-            (instance? File body)
-            (do (.sendResponseHeaders exchange status (.length ^File body))
-                (protocols/write-body-to-stream body response out))
-            :else
-            (let [baos (ByteArrayOutputStream. output-buffer-size)]
-              (protocols/write-body-to-stream body response baos)
-              (.sendResponseHeaders exchange status (.size baos))
-              (io/copy (.toByteArray baos) out))))
-        (catch Throwable t
-          (logger/error (.getMessage t))
-          (let [page (.getBytes "Internal Server Error" "UTF-8")]
-            (.set (.getResponseHeaders exchange) "content-type" "text/html")
-            (.sendResponseHeaders exchange 500 (alength page))
-            (io/copy page (.getResponseBody exchange))))
-        (finally
-          (.flush (.getResponseBody exchange)))))))
+        (let [content-length
+              (cond
+                (string? body)
+                (.length ^String body)
 
-(defn- get-handler [handler exchange-function]
-  (proxy [HttpHandler] []
-    (handle [exchange]
-      (handle-exchange exchange handler exchange-function))))
+                (instance? InputStream body)
+                (get headers content-length (get headers content-length 0))
+
+                (instance? File body)
+                (.length ^File body)
+
+                (instance? byte-array-class body)
+                (count body)
+
+                (nil? body)
+                0)]
+
+          (.sendResponseHeaders exchange status content-length)
+          (protocols/write-body-to-stream body response out)))
+
+      (catch Throwable t
+        (logger/error (.getMessage t))
+        (let [page (.getBytes ^String internal-server-error)]
+          (.set (.getResponseHeaders exchange) content-type text-html)
+          (.sendResponseHeaders exchange 500 (alength page))
+          (io/copy page (.getResponseBody exchange))))
+
+      (finally
+        (.flush (.getResponseBody exchange))))))
+
+(defn- get-handler [handler schema]
+  (reify HttpHandler
+    (handle [_ exchange]
+      (handle-exchange exchange handler schema))))
 
 (defn- get-server
-  ([host port handler exchange-function]
+  ([host port handler schema]
    (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)]
-     (.createContext server "/" (get-handler handler exchange-function))
+     (.createContext server index-path (get-handler handler schema))
      server))
-  ([host port ssl-context handler exchange-function]
+  ([host port ssl-context handler schema]
    (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
      (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-     (.createContext server "/" (get-handler handler exchange-function))
+     (.createContext server index-path (get-handler handler schema))
      server)))
 
 (defn stop-http-server
@@ -119,6 +120,7 @@
                           for longer than this period may be stopped (default 60000)
   :ssl-context          - the ssl context, that is used in https server
   :executor             - executor to use in HttpServer, will default to ThreadPoolExecutor"
+
   [handler {:keys [
                    host
                    port
@@ -129,17 +131,18 @@
                    ssl-context
                    executor
                    ]
-            :or   {host                "127.0.0.1"
+            :or   {host                localhost
                    port                8080
                    min-threads         8
                    max-threads         50
                    max-queued-requests 1024
                    thread-idle-timeout 60000
                    ssl-context         nil
-                   executor            nil}}]
+                   executor            nil
+                   }}]
   (let [^HttpServer server (if ssl-context
-                             (get-server host port ssl-context handler https-exchange->request-map)
-                             (get-server host port handler http-exchange->request-map))]
+                             (get-server host port ssl-context handler https-schema)
+                             (get-server host port handler http-schema))]
     (if executor
       (.setExecutor server executor)
       (.setExecutor server (ThreadPoolExecutor. min-threads

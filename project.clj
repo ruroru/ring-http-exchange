@@ -7,11 +7,15 @@
                  [org.clojure/tools.logging "1.3.0"]
                  [ring/ring-core "1.12.2"]]
 
-  :profiles {:test {:resource-paths ["test-resources"]
-                    :dependencies   [
-                                     [compojure "1.7.1"]
-                                     [babashka/fs "0.5.22"]
-                                     [clj-http "3.13.0"]
-                                     ]}}
+  :source-paths ["src/clojure"]
+
+
+  :profiles {:test {:resource-paths    ["test/resources"]
+                    :source-paths      ["test/clojure"]
+                    :dependencies      [
+                                        [compojure "1.7.1"]
+                                        [babashka/fs "0.5.22"]
+                                        [clj-http "3.13.0"]
+                                        ]}}
 
   :plugins [[lein-ancient "0.7.0"]])
