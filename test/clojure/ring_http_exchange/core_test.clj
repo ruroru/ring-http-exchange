@@ -55,16 +55,7 @@
                            :headers {"Content-type"      "text/html; charset=utf-8"
                                      "Transfer-encoding" "chunked"}
                            :body    ""}]
-    (verify-response server-response server-config expected-response))
-  (verify-response
-    {:status  200
-     :headers {"Content-type" "text/html; charset=utf-8"}
-     :body    nil}
-    {:port 8081}
-    {:status  200
-     :headers {"Content-type"      "text/html; charset=utf-8"
-               "Transfer-encoding" "chunked"}
-     :body    ""}))
+    (verify-response server-response server-config expected-response)))
 
 (deftest can-override-http-port
   (let [server-response {:status  200
