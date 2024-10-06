@@ -20,6 +20,9 @@ web app, while avoiding adding any new dependencies on the classpath
      :headers {"Content-Type" "text/html; charset=utf-8"}
      :body "hello world"})
   {:port 8080
+   :ssl-context (ssl/keystore->ssl-context 
+                                      (io/resource "keystore.jks") "keystore-password"
+                                      (io/resource "truststore.jks") "truststore-password")
    :executor (Executors/newVirtualThreadPerTaskExecutor)})
 ```
 
