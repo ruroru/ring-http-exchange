@@ -21,6 +21,18 @@
 (def ^:private localhost "127.0.0.1")
 (def ^:private text-html "text/html")
 
+(defn- get-header-value [^List header-list]
+  (if (= 1 (.size ^List header-list))
+    (first header-list)
+    (str/join comma header-list)))
+
+(defn- get-headers [request-headers]
+  (reduce
+    (fn [ring-headers header]
+      (assoc ring-headers (.toLowerCase ^String (first header))
+                          (get-header-value (second header))))
+    {} request-headers))
+
 (defn- http-exchange->request-map [^HttpExchange exchange schema host port]
   {:server-port     port
    :server-name     host
@@ -30,11 +42,7 @@
    :scheme          schema
    :request-method  (keyword (str/lower-case (.getRequestMethod exchange)))
    :protocol        (.getProtocol exchange)
-   :headers         (->> (for [[k vs] (.getRequestHeaders exchange)]
-                           [(str/lower-case k) (if (= 1 (.size ^List vs))
-                                                 (first vs)
-                                                 (str/join comma vs))])
-                         (into {}))
+   :headers         (get-headers (into {} (.getRequestHeaders exchange)))
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
 
@@ -46,7 +54,7 @@
             v
             (str v)))))
 
-(defn get-content-length [body headers]
+(defn- get-content-length [body headers]
   (cond
     (string? body) (.length ^String body)
     (instance? InputStream body) (get headers content-length 0)
