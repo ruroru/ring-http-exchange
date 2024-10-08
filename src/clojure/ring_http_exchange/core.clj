@@ -94,14 +94,14 @@
       (handle-exchange exchange handler schema host server-port))))
 
 (defn- get-server
-  ([host port handler schema]
+  ([host port handler]
    (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)]
-     (.createContext server index-path (get-handler handler schema host port))
+     (.createContext server index-path (get-handler handler http-schema host port))
      server))
-  ([host port ssl-context handler schema]
+  ([host port handler ssl-context]
    (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
      (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-     (.createContext server index-path (get-handler handler schema host port))
+     (.createContext server index-path (get-handler handler https-schema host port))
      server)))
 
 (defn stop-http-server
@@ -146,8 +146,8 @@
                    executor            nil
                    }}]
   (let [^HttpServer server (if ssl-context
-                             (get-server host port ssl-context handler https-schema)
-                             (get-server host port handler http-schema))]
+                             (get-server host port handler ssl-context)
+                             (get-server host port handler))]
     (if executor
       (.setExecutor server executor)
       (.setExecutor server (ThreadPoolExecutor. min-threads
