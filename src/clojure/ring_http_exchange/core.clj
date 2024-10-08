@@ -160,5 +160,5 @@
     (try
       (doto server .start)
       (catch Throwable t
-        (stop-http-server server)
+        (logger/error (.getMessage t))
         (throw t)))))
