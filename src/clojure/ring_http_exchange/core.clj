@@ -26,12 +26,23 @@
     (first header-list)
     (str/join comma header-list)))
 
-(defn- get-headers [request-headers]
-  (reduce
-    (fn [ring-headers header]
-      (assoc ring-headers (.toLowerCase ^String (first header))
-                          (get-header-value (second header))))
-    {} request-headers))
+(defmacro get-headers [request-headers]
+  `(reduce
+     (fn [ring-headers# header#]
+       (assoc ring-headers#
+         (.toLowerCase ^String (first header#))
+         (get-header-value (second header#))))
+     {}
+     ~request-headers))
+
+(defmacro set-response-headers [exchange headers]
+  `(let [response-headers# (.getResponseHeaders ~exchange)]
+     (doseq [[k# v#] ~headers]
+       (.add response-headers#
+             (name k#)
+             (if (instance? String v#)
+               v#
+               (str v#))))))
 
 (defn- http-exchange->request-map [^HttpExchange exchange schema host port]
   {:server-port     port
@@ -45,14 +56,6 @@
    :headers         (get-headers (into {} (.getRequestHeaders exchange)))
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
-
-(defn- set-response-headers [^HttpExchange exchange headers]
-  (doseq [:let [response-headers (.getResponseHeaders exchange)]
-          [k v] headers]
-    (.add response-headers (name k)
-          (if (instance? String v)
-            v
-            (str v)))))
 
 (defn- get-content-length [body headers]
   (cond
