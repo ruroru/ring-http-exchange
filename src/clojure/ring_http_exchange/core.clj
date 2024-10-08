@@ -17,7 +17,7 @@
 (def ^:private http-schema :http)
 (def ^:private https-schema :https)
 (def ^:private index-path "/")
-(def ^:private internal-server-error-bytes (.getBytes "Internal Server Error"))
+(def ^:private internal-server-error "Internal Server Error")
 (def ^:private localhost "127.0.0.1")
 (def ^:private text-html "text/html")
 
@@ -73,7 +73,7 @@
             (catch Throwable t
               (logger/error (.getMessage ^Throwable t))
               {:status  500
-               :body    internal-server-error-bytes
+               :body    internal-server-error
                :headers {content-type text-html}}))]
 
       (try
