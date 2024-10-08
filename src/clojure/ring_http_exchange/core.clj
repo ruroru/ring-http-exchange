@@ -99,10 +99,12 @@
      (.createContext server index-path (get-handler handler http-schema host port))
      server))
   ([host port handler ssl-context]
-   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
-     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-     (.createContext server index-path (get-handler handler https-schema host port))
-     server)))
+   (if ssl-context
+     (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
+       (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+       (.createContext server index-path (get-handler handler https-schema host port))
+       server)
+     (get-server host port handler))))
 
 (defn stop-http-server
   "Stops a com.sun.net.httpserver.HttpServer with an optional
