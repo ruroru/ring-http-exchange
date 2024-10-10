@@ -5,7 +5,7 @@
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as string]
-    [clojure.test :refer [deftest is]]
+    [clojure.test :refer [deftest is testing]]
     [ring-http-exchange.core :as server]
     [ring-http-exchange.ssl :as ssl])
   (:import (java.io ByteArrayInputStream File)
@@ -85,6 +85,27 @@
                                      "Content-type"   "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
+
+
+(deftest can-use-ssl-context-with-custom-protocol
+  (let [tls-versions ["TLS" "SSL" "TLSv1.3"]]
+    (doseq [tls-version tls-versions]
+      (testing (format "Testing %s protocol" tls-version)
+        (let [server-response {:status  200
+                               :headers {"Content-type" "text/html; charset=utf-8"}
+                               :body    "hello world"}
+              server-config {:port        6443
+                             :ssl-context (ssl/keystore->ssl-context
+                                            (io/resource "keystore.jks")
+                                            default-password
+                                            (io/resource "truststore.jks")
+                                            default-password
+                                            tls-version)}
+              expected-response {:status  200
+                                 :headers {"Content-length" "11"
+                                           "Content-type"   "text/html; charset=utf-8"}
+                                 :body    "hello world"}]
+          (verify-response server-response server-config expected-response))))))
 
 
 (deftest ssl-context-set-t-nil-creates-http-server

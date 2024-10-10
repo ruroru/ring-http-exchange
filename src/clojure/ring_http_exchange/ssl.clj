@@ -20,15 +20,18 @@
       (TrustManagerFactory/getInstance (TrustManagerFactory/getDefaultAlgorithm))
       (.init trust-store))))
 
-(defn keystore->ssl-context [keystore key-password truststore trust-password]
-  (when keystore
-    (let [keystore (load-keystore keystore key-password)
-          truststore (if truststore
-                       (load-keystore truststore trust-password)
-                       keystore)]
-      (doto (SSLContext/getInstance "TLS")
-        (.init
-          (keystore->key-managers keystore key-password)
-          (truststore->trust-managers truststore)
-          nil)))))
+(defn keystore->ssl-context
+  ([keystore key-password truststore trust-password instance-protocol]
+   (when keystore
+     (let [keystore (load-keystore keystore key-password)
+           truststore (if truststore
+                        (load-keystore truststore trust-password)
+                        keystore)]
+       (doto (SSLContext/getInstance instance-protocol)
+         (.init
+           (keystore->key-managers keystore key-password)
+           (truststore->trust-managers truststore)
+           nil)))))
+  ([keystore key-password truststore trust-password]
+   (keystore->ssl-context keystore key-password truststore trust-password "TLS")))
 
