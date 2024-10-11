@@ -77,16 +77,13 @@
                :headers {content-type text-html}}))]
 
       (try
-        (let [out (.getResponseBody exchange)]
+        (with-open [out (.getResponseBody exchange)]
           (set-response-headers exchange headers)
           (.sendResponseHeaders exchange status (get-content-length body headers))
           (protocols/write-body-to-stream body response out))
 
         (catch Throwable t
-          (logger/error (.getMessage t)))
-
-        (finally
-          (.flush (.getResponseBody exchange)))))))
+          (logger/error (.getMessage t)))))))
 
 (defn- get-handler [handler schema host server-port]
   (reify HttpHandler
