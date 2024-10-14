@@ -77,10 +77,11 @@
                :headers {content-type text-html}}))]
 
       (try
-        (with-open [out (.getResponseBody exchange)]
-          (set-response-headers exchange headers)
-          (.sendResponseHeaders exchange status (get-content-length body headers))
-          (protocols/write-body-to-stream body response out))
+        (let [content-length (get-content-length body headers)]
+          (with-open [out (.getResponseBody exchange)]
+            (set-response-headers exchange headers)
+            (.sendResponseHeaders exchange status content-length)
+            (protocols/write-body-to-stream body response out)))
 
         (catch Throwable t
           (logger/error (.getMessage t)))))))
