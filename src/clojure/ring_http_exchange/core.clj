@@ -10,28 +10,39 @@
 
 (set! *warn-on-reflection* true)
 
-(def ^:private byte-array-class (Class/forName "[B"))
-(def ^:private comma ",")
-(def ^:private content-length "Content-length")
-(def ^:private content-type "Content-type")
-(def ^:private http-schema :http)
-(def ^:private https-schema :https)
-(def ^:private index-path "/")
-(def ^:private internal-server-error-bytes (.getBytes "Internal Server Error"))
-(def ^:private localhost "127.0.0.1")
-(def ^:private text-html "text/html")
+(def ^:const ^:private byte-array-class (Class/forName "[B"))
+(def ^:const ^:private comma ",")
+(def ^:const ^:private content-length "Content-length")
+(def ^:const ^:private content-type "Content-type")
+(def ^:const ^:private http-schema :http)
+(def ^:const ^:private https-schema :https)
+(def ^:const ^:private index-path "/")
+(def ^:const ^:private internal-server-error "Internal Server Error")
+(def ^:const ^:private localhost "127.0.0.1")
+(def ^:const ^:private text-html "text/html")
 
 (defn- get-header-value [^List header-list]
   (if (= 1 (.size ^List header-list))
     (first header-list)
     (str/join comma header-list)))
 
-(defn- get-headers [request-headers]
-  (reduce
-    (fn [ring-headers header]
-      (assoc ring-headers (.toLowerCase ^String (first header))
-                          (get-header-value (second header))))
-    {} request-headers))
+(defmacro get-request-headers [request-headers]
+  `(reduce
+     (fn [ring-headers# header#]
+       (assoc ring-headers#
+         (.toLowerCase ^String (first header#))
+         (get-header-value (second header#))))
+     {}
+     ~request-headers))
+
+(defmacro set-response-headers [exchange headers]
+  `(let [response-headers# (.getResponseHeaders ~exchange)]
+     (doseq [[k# v#] ~headers]
+       (.add response-headers#
+             (name k#)
+             (if (instance? String v#)
+               v#
+               (str v#))))))
 
 (defn- http-exchange->request-map [^HttpExchange exchange schema host port]
   {:server-port     port
@@ -40,26 +51,20 @@
    :uri             (.getPath (.getRequestURI exchange))
    :query-string    (.getQuery (.getRequestURI exchange))
    :scheme          schema
-   :request-method  (keyword (str/lower-case (.getRequestMethod exchange)))
+   :request-method  ((memoize (fn [request-method]
+                         (keyword (.toLowerCase ^String  request-method))))
+                       (.getRequestMethod exchange))
    :protocol        (.getProtocol exchange)
-   :headers         (get-headers (into {} (.getRequestHeaders exchange)))
+   :headers         (get-request-headers (into {} (.getRequestHeaders exchange)))
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
-
-(defn- set-response-headers [^HttpExchange exchange headers]
-  (doseq [:let [response-headers (.getResponseHeaders exchange)]
-          [k v] headers]
-    (.add response-headers (name k)
-          (if (instance? String v)
-            v
-            (str v)))))
 
 (defn- get-content-length [body headers]
   (cond
     (string? body) (.length ^String body)
     (instance? InputStream body) (get headers content-length 0)
     (instance? File body) (.length ^File body)
-    (instance? byte-array-class body) (alength body)
+    (instance? byte-array-class body) (alength ^"[B" body)
     (nil? body) 0))
 
 (defn- handle-exchange [^HttpExchange exchange handler schema host port]
@@ -70,20 +75,18 @@
             (catch Throwable t
               (logger/error (.getMessage ^Throwable t))
               {:status  500
-               :body    internal-server-error-bytes
+               :body    internal-server-error
                :headers {content-type text-html}}))]
 
       (try
-        (let [out (.getResponseBody exchange)]
-          (set-response-headers exchange headers)
-          (.sendResponseHeaders exchange status (get-content-length body headers))
-          (protocols/write-body-to-stream body response out))
+        (let [content-length (get-content-length body headers)]
+          (with-open [out (.getResponseBody exchange)]
+            (set-response-headers exchange headers)
+            (.sendResponseHeaders exchange status content-length)
+            (protocols/write-body-to-stream body response out)))
 
         (catch Throwable t
-          (logger/error (.getMessage t)))
-
-        (finally
-          (.flush (.getResponseBody exchange)))))))
+          (logger/error (.getMessage t)))))))
 
 (defn- get-handler [handler schema host server-port]
   (reify HttpHandler
@@ -91,15 +94,17 @@
       (handle-exchange exchange handler schema host server-port))))
 
 (defn- get-server
-  ([host port handler schema]
+  ([host port handler]
    (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)]
-     (.createContext server index-path (get-handler handler schema host port))
+     (.createContext server index-path (get-handler handler http-schema host port))
      server))
-  ([host port ssl-context handler schema]
-   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
-     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-     (.createContext server index-path (get-handler handler schema host port))
-     server)))
+  ([host port handler ssl-context]
+   (if ssl-context
+     (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
+       (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+       (.createContext server index-path (get-handler handler https-schema host port))
+       server)
+     (get-server host port handler))))
 
 (defn stop-http-server
   "Stops a com.sun.net.httpserver.HttpServer with an optional
@@ -143,8 +148,8 @@
                    executor            nil
                    }}]
   (let [^HttpServer server (if ssl-context
-                             (get-server host port ssl-context handler https-schema)
-                             (get-server host port handler http-schema))]
+                             (get-server host port handler ssl-context)
+                             (get-server host port handler))]
     (if executor
       (.setExecutor server executor)
       (.setExecutor server (ThreadPoolExecutor. min-threads
@@ -155,5 +160,5 @@
     (try
       (doto server .start)
       (catch Throwable t
-        (stop-http-server server)
+        (logger/error (.getMessage t))
         (throw t)))))
