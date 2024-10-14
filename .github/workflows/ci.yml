@@ -6,9 +6,7 @@ jobs:
   test-jvm:
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        java_version: [21]
-        java: [zulu]
+        os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -16,8 +14,8 @@ jobs:
       - name: Prepare java
         uses: actions/setup-java@v4
         with:
-          distribution: ${{ matrix.java }}
-          java-version: ${{ matrix.java_version }}
+          distribution: adopt
+          java-version: 21
       - name: Install clojure tools
         uses: DeLaGuardo/setup-clojure@12.5
         with:
