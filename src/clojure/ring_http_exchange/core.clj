@@ -10,16 +10,16 @@
 
 (set! *warn-on-reflection* true)
 
-(def ^:private byte-array-class (Class/forName "[B"))
-(def ^:private comma ",")
-(def ^:private content-length "Content-length")
-(def ^:private content-type "Content-type")
-(def ^:private http-schema :http)
-(def ^:private https-schema :https)
-(def ^:private index-path "/")
-(def ^:private internal-server-error "Internal Server Error")
-(def ^:private localhost "127.0.0.1")
-(def ^:private text-html "text/html")
+(def ^:const ^:private byte-array-class (Class/forName "[B"))
+(def ^:const ^:private comma ",")
+(def ^:const ^:private content-length "Content-length")
+(def ^:const ^:private content-type "Content-type")
+(def ^:const ^:private http-schema :http)
+(def ^:const ^:private https-schema :https)
+(def ^:const ^:private index-path "/")
+(def ^:const ^:private internal-server-error "Internal Server Error")
+(def ^:const ^:private localhost "127.0.0.1")
+(def ^:const ^:private text-html "text/html")
 
 (defn- get-header-value [^List header-list]
   (if (= 1 (.size ^List header-list))
