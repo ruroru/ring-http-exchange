@@ -26,7 +26,7 @@
     (first header-list)
     (str/join comma header-list)))
 
-(defmacro get-headers [request-headers]
+(defmacro get-request-headers [request-headers]
   `(reduce
      (fn [ring-headers# header#]
        (assoc ring-headers#
@@ -55,7 +55,7 @@
                          (keyword (.toLowerCase ^String  request-method))))
                        (.getRequestMethod exchange))
    :protocol        (.getProtocol exchange)
-   :headers         (get-headers (into {} (.getRequestHeaders exchange)))
+   :headers         (get-request-headers (into {} (.getRequestHeaders exchange)))
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
 
