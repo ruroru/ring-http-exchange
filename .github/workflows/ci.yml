@@ -6,9 +6,9 @@ jobs:
   test-jvm:
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
-        java_version: [ '21' ]
-        java: [ 'zulu' ]
+        os: [ubuntu-latest]
+        java_version: [21]
+        java: [zulu]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -21,6 +21,6 @@ jobs:
       - name: Install clojure tools
         uses: DeLaGuardo/setup-clojure@12.5
         with:
-          lein: 2.9.1
+          lein: latest
       - name: Run unit tests
         run: lein test
