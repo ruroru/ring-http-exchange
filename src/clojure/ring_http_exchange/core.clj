@@ -64,7 +64,7 @@
     (string? body) (.length ^String body)
     (instance? InputStream body) (get headers content-length 0)
     (instance? File body) (.length ^File body)
-    (instance? byte-array-class body) (alength body)
+    (instance? byte-array-class body) (alength ^"[B" body)
     (nil? body) 0))
 
 (defn- handle-exchange [^HttpExchange exchange handler schema host port]
