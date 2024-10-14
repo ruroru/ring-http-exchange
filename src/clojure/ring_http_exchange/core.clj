@@ -51,7 +51,9 @@
    :uri             (.getPath (.getRequestURI exchange))
    :query-string    (.getQuery (.getRequestURI exchange))
    :scheme          schema
-   :request-method  (keyword (str/lower-case (.getRequestMethod exchange)))
+   :request-method  ((memoize (fn [request-method]
+                         (keyword (.toLowerCase ^String  request-method))))
+                       (.getRequestMethod exchange))
    :protocol        (.getProtocol exchange)
    :headers         (get-headers (into {} (.getRequestHeaders exchange)))
    :ssl-client-cert nil
