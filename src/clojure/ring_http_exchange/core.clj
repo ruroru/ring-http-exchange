@@ -23,7 +23,7 @@
 
 (defn- get-header-value [^List header-list]
   (if (= 1 (.size ^List header-list))
-    (first header-list)
+    (.get header-list 0)
     (str/join comma header-list)))
 
 (defmacro get-request-headers [request-headers]
