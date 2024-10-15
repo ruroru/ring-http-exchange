@@ -7,12 +7,20 @@
     [clojure.string :as string]
     [clojure.test :refer [deftest is testing]]
     [ring-http-exchange.core :as server]
-    [ring-http-exchange.ssl :as ssl])
-  (:import (java.io ByteArrayInputStream File)
+    [ring-http-exchange.ssl :as ssl]
+    [ring.core.protocols :as protocols])
+  (:import (clojure.lang Keyword)
+           (java.io ByteArrayInputStream File OutputStream)
            (java.util.concurrent Executors)
            (sun.net.httpserver FixedLengthInputStream)))
 
 (def default-password "password")
+
+(extend-protocol protocols/StreamableResponseBody
+  Keyword
+  (write-body-to-stream [body _ ^OutputStream output-stream]
+    (.write output-stream ^bytes (.getBytes (name body)))
+    (.close output-stream)))
 
 (defn- verify-response
   ([response-body expected-responses]
@@ -27,15 +35,13 @@
                                       (if (:port server-config)
                                         (:port server-config)
                                         8080))
-                              {:insecure? true})
-         ]
+                              {:insecure? true})]
 
      (is (= (:status expected-responses) (:status response)))
      (is (= (:headers expected-responses)
             (dissoc (:headers response) "Date")))
      (is (= (:body expected-responses) (:body response)))
-     (server/stop-http-server server)))
-  )
+     (server/stop-http-server server))))
 
 (deftest port-defaults-to-8080
   (let [server-response {:status  200
@@ -86,7 +92,6 @@
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
-
 (deftest can-use-ssl-context-with-custom-protocol
   (let [tls-versions ["TLS" "SSL" "TLSv1.3"]]
     (doseq [tls-version tls-versions]
@@ -106,7 +111,6 @@
                                            "Content-type"   "text/html; charset=utf-8"}
                                  :body    "hello world"}]
           (verify-response server-response server-config expected-response))))))
-
 
 (deftest ssl-context-set-t-nil-creates-http-server
   (let [server-response {:status  200
@@ -177,20 +181,7 @@
                            :body    "hello input stream"}]
     (verify-response server-response expected-response)))
 
-(deftest input-stream-without-content-length-sends-chunked-response
-  (let [server-response {:status  201
-                         :headers {"Content-length" 18
-                                   "Content-type"   "text/html; charset=utf-8"}
-                         :body    (ByteArrayInputStream. (.getBytes "hello input stream"))}
-
-        expected-response {:status  201
-                           :headers {"Content-type"   "text/html; charset=utf-8"
-                                     "Content-length" "18"}
-                           :body    "hello input stream"}
-        ]
-    (verify-response server-response expected-response)))
-
-(deftest can-survive-exceptions
+(deftest can-survive-exceptions-in-handler
   (let [port 8083
         server (server/run-http-server (fn [req]
                                          (if (= (:uri req) "/error")
@@ -208,6 +199,7 @@
     (is (= 200 (:status response2)))
     (is (= "hello world" (:body response2)))
     (server/stop-http-server server)))
+
 
 (defn verify-request-map [server-config expected-request-map]
   (let [
@@ -236,7 +228,6 @@
                               :scheme          :http,
                               :request-method  :get}]
     (verify-request-map server-config expected-request-map)))
-
 
 (deftest test-request-map-head-request
   (let [server-config {:host "localhost"
@@ -285,3 +276,14 @@
       (is (= (:status response) 200))
       (is (= expected-request-map (edn/read-string (:body response))))
       (server/stop-http-server server))))
+
+(deftest allow-setting-StreamableResponseBody
+  (let [server-response {:status  200
+                         :headers {"Content-type" "text/html; charset=utf-8"}
+                         :body    :false}
+
+        expected-response {:status  200
+                           :headers {"Content-type"      "text/html; charset=utf-8"
+                                     "Transfer-encoding" "chunked"}
+                           :body    "false"}]
+    (verify-response server-response expected-response)))

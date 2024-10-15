@@ -30,13 +30,14 @@ web app, while avoiding adding any new dependencies on the classpath
 
 ### Supported response body types
 
-| Response Body Type    | 
-|-----------------------|
-| `java.lang.String`    |
-| `java.io.InputStream` |
-| `java.io.File`        |
-| `byte[]`              |
-| `nil`                 |
+| Response Body Type                           | 
+|----------------------------------------------|
+| `java.lang.String`                           |
+| `java.io.InputStream`                        |
+| `java.io.File`                               |
+| `byte[]`                                     |
+| `ring.core.protocols/StreamableResponseBody` |
+| `nil`                                        |
 
 ### Server configuration
 
@@ -53,9 +54,8 @@ web app, while avoiding adding any new dependencies on the classpath
 
 ### Limitations
 
-* The `Content-Length` header must be explicitly set when using `java.io.InputStream`, if the `Content-length` is
-  required. Otherwise, the `Transfer-Encoding` header will be set to `chunked`
-* When the response body is `nil`, the `Transfer-Encoding` header will be automatically set to `chunked`
+* `Transfer-Encoding` header will be set to `chunked`, if it is not possible to get length of the body.
+
 
 ## License
 

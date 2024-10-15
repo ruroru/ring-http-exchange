@@ -3,7 +3,7 @@
             [clojure.tools.logging :as logger]
             [ring.core.protocols :as protocols])
   (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsServer)
-           (java.io File InputStream)
+           (java.io File)
            (java.net InetSocketAddress)
            (java.util List)
            (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
@@ -12,7 +12,6 @@
 
 (def ^:const ^:private byte-array-class (Class/forName "[B"))
 (def ^:const ^:private comma ",")
-(def ^:const ^:private content-length "Content-length")
 (def ^:const ^:private content-type "Content-type")
 (def ^:const ^:private http-schema :http)
 (def ^:const ^:private https-schema :https)
@@ -61,19 +60,26 @@
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
 
-(defn- get-content-length [body headers]
+(defn- get-content-length [body]
   (cond
     (string? body) (.length ^String body)
-    (instance? InputStream body) (get headers content-length 0)
     (instance? File body) (.length ^File body)
     (instance? byte-array-class body) (alength ^"[B" body)
-    (nil? body) 0))
+    :else 0))
+
+(defn- not-supported-body? [body]
+  (not (satisfies? protocols/StreamableResponseBody body)))
 
 (defn- handle-exchange [^HttpExchange exchange handler schema host port]
   (with-open [exchange exchange]
     (let [{:keys [status body headers] :as response}
           (try
-            (handler (http-exchange->request-map exchange schema host port))
+            (let [resp (handler (http-exchange->request-map exchange schema host port))]
+              (when (not-supported-body? (:body resp))
+                (logger/error (:body resp) " must implement StreamableResponseBody protocol.")
+                (throw (Exception. "Illegal body type.")))
+              resp)
+
             (catch Throwable t
               (logger/error (.getMessage ^Throwable t))
               {:status  500
@@ -81,12 +87,11 @@
                :headers {content-type text-html}}))]
 
       (try
-        (let [content-length (get-content-length body headers)]
-          (with-open [out (.getResponseBody exchange)]
-            (set-response-headers exchange headers)
-            (.sendResponseHeaders exchange status content-length)
-            (protocols/write-body-to-stream body response out)))
-
+        (set-response-headers exchange headers)
+        (let [content-length (get-content-length body)]
+          (.sendResponseHeaders exchange status content-length))
+        (with-open [out (.getResponseBody exchange)]
+          (protocols/write-body-to-stream body response out))
         (catch Throwable t
           (logger/error (.getMessage t)))))))
 
