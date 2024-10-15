@@ -44,6 +44,10 @@
                v#
                (str v#))))))
 
+(def ^:private get-request-method
+  (memoize (fn [request-method]
+             (keyword (.toLowerCase ^String request-method)))))
+
 (defn- http-exchange->request-map [^HttpExchange exchange schema host port]
   {:server-port     port
    :server-name     host
@@ -51,9 +55,7 @@
    :uri             (.getPath (.getRequestURI exchange))
    :query-string    (.getQuery (.getRequestURI exchange))
    :scheme          schema
-   :request-method  ((memoize (fn [request-method]
-                         (keyword (.toLowerCase ^String  request-method))))
-                       (.getRequestMethod exchange))
+   :request-method  (get-request-method (.getRequestMethod exchange))
    :protocol        (.getProtocol exchange)
    :headers         (get-request-headers (into {} (.getRequestHeaders exchange)))
    :ssl-client-cert nil
