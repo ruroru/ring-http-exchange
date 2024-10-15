@@ -12,9 +12,11 @@ web app, while avoiding adding any new dependencies on the classpath
 ## Usage
 
 ``` clojure
-(require 'ring-http-exchange.core)
+(:require [ring-http-exchange.core :as server])
+```
 
-(ring-http-exchange.core/run-http-server
+``` clojure
+(server/run-http-server
   (fn [_]
     {:status 200
      :headers {"Content-Type" "text/html; charset=utf-8"}
