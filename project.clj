@@ -9,8 +9,8 @@
 
   :source-paths ["src/clojure"]
 
-
   :profiles {:test {:resource-paths ["test/resources"]
+                    :global-vars {*warn-on-reflection* true}
                     :source-paths   ["test/clojure"]
                     :dependencies   [
                                      [babashka/fs "0.5.22"]
