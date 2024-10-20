@@ -91,8 +91,8 @@
 
 (defn- handle-exchange [^HttpExchange exchange handler schema host port]
   (with-open [exchange exchange]
-    (let [request-map (http-exchange->request-map exchange schema host port)
-          {:keys [status body headers] :as response} (get-response-for-exchange handler request-map)]
+    (let [{:keys [status body headers] :as response} (->> (http-exchange->request-map exchange schema host port)
+                                                          (get-response-for-exchange handler))]
       (try
         (set-response-headers exchange headers)
         (let [content-length (get-content-length body)]
