@@ -45,7 +45,7 @@
   (memoize (fn [request-method]
              (keyword (.toLowerCase ^String request-method)))))
 
-(defn- http-exchange->request-map [^HttpExchange exchange schema host port]
+(defn- http-exchange->request-map [schema host port ^HttpExchange exchange]
   {:server-port     port
    :server-name     host
    :remote-addr     (.getHostString (.getRemoteAddress exchange))
@@ -91,7 +91,7 @@
 
 (defn- handle-exchange [^HttpExchange exchange handler schema host port]
   (with-open [exchange exchange]
-    (let [{:keys [status body headers] :as response} (->> (http-exchange->request-map exchange schema host port)
+    (let [{:keys [status body headers] :as response} (->> (http-exchange->request-map schema host port exchange)
                                                           (get-response-for-exchange handler))]
       (try
         (set-response-headers exchange headers)
