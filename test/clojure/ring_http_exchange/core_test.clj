@@ -6,6 +6,7 @@
     [clojure.java.io :as io]
     [clojure.string :as string]
     [clojure.test :refer [deftest is testing]]
+    [clojure.tools.logging :as logger]
     [ring-http-exchange.core :as server]
     [ring-http-exchange.ssl :as ssl]
     [ring.core.protocols :as protocols])
@@ -35,8 +36,9 @@
                                       (if (:port server-config)
                                         (:port server-config)
                                         8080))
-                              {:insecure? true})]
-
+                              {:insecure?        true
+                               :throw-exceptions false})]
+     (logger/info response)
      (is (= (:status expected-responses) (:status response)))
      (is (= (:headers expected-responses)
             (dissoc (:headers response) "Date")))
@@ -286,4 +288,16 @@
                            :headers {"Content-type"      "text/html; charset=utf-8"
                                      "Transfer-encoding" "chunked"}
                            :body    "false"}]
+    (verify-response server-response expected-response)))
+
+
+(deftest not-supported-body-returns-500-internal-server-error
+  (let [server-response {:status  200
+                         :headers {"Content-type" "text/html; charset=utf-8"}
+                         :body    1}
+
+        expected-response {:status  500
+                           :headers {"Content-length" "21"
+                                     "Content-type"   "text/html"}
+                           :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
