@@ -8,11 +8,8 @@
            (java.util List)
            (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
 
-(set! *warn-on-reflection* true)
-
 (def ^:const ^:private byte-array-class (Class/forName "[B"))
 (def ^:const ^:private comma ",")
-(def ^:const ^:private content-length "Content-length")
 (def ^:const ^:private content-type "Content-type")
 (def ^:const ^:private http-schema :http)
 (def ^:const ^:private https-schema :https)
@@ -23,7 +20,7 @@
 
 (defn- get-header-value [^List header-list]
   (if (= 1 (.size ^List header-list))
-    (first header-list)
+    (.get header-list 0)
     (str/join comma header-list)))
 
 (defmacro get-request-headers [request-headers]
@@ -44,6 +41,10 @@
                v#
                (str v#))))))
 
+(def ^:private get-request-method
+  (memoize (fn [request-method]
+             (keyword (.toLowerCase ^String request-method)))))
+
 (defn- http-exchange->request-map [^HttpExchange exchange schema host port]
   {:server-port     port
    :server-name     host
@@ -51,42 +52,56 @@
    :uri             (.getPath (.getRequestURI exchange))
    :query-string    (.getQuery (.getRequestURI exchange))
    :scheme          schema
-   :request-method  ((memoize (fn [request-method]
-                         (keyword (.toLowerCase ^String  request-method))))
-                       (.getRequestMethod exchange))
+   :request-method  (get-request-method (.getRequestMethod exchange))
    :protocol        (.getProtocol exchange)
    :headers         (get-request-headers (into {} (.getRequestHeaders exchange)))
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
 
-(defn- get-content-length [body headers]
+(defn- get-content-length [body]
   (cond
     (string? body) (.length ^String body)
-    (instance? InputStream body) (get headers content-length 0)
     (instance? File body) (.length ^File body)
     (instance? byte-array-class body) (alength ^"[B" body)
-    (nil? body) 0))
+    :else 0))
+
+(defn- supported-body? [body]
+  (or
+    (string? body)
+    (instance? File body)
+    (instance? InputStream body)
+    (instance? byte-array-class body)
+    (nil? body)
+    (satisfies? protocols/StreamableResponseBody body)))
+
+(defn- get-response-for-exchange [handler request-map]
+  (try
+    (let [resp (handler request-map)]
+      (if (supported-body? (:body resp))
+        resp
+        (do
+          (logger/error (:body resp) " must implement StreamableResponseBody protocol.")
+          (throw (Exception. "Illegal body type.")))))
+
+    (catch Throwable t
+      (logger/error (.getMessage ^Throwable t))
+      {:status  500
+       :body    internal-server-error
+       :headers {content-type text-html}})))
 
 (defn- handle-exchange [^HttpExchange exchange handler schema host port]
   (with-open [exchange exchange]
-    (let [{:keys [status body headers] :as response}
-          (try
-            (handler (http-exchange->request-map exchange schema host port))
-            (catch Throwable t
-              (logger/error (.getMessage ^Throwable t))
-              {:status  500
-               :body    internal-server-error
-               :headers {content-type text-html}}))]
-
+    (let [request-map (http-exchange->request-map exchange schema host port)
+          {:keys [status body headers] :as response} (get-response-for-exchange handler request-map)]
       (try
-        (let [content-length (get-content-length body headers)]
-          (with-open [out (.getResponseBody exchange)]
-            (set-response-headers exchange headers)
-            (.sendResponseHeaders exchange status content-length)
-            (protocols/write-body-to-stream body response out)))
-
+        (set-response-headers exchange headers)
+        (let [content-length (get-content-length body)]
+          (.sendResponseHeaders exchange status content-length))
+        (let [out (.getResponseBody exchange)]
+          (protocols/write-body-to-stream body response out))
         (catch Throwable t
-          (logger/error (.getMessage t)))))))
+          (logger/error (.getMessage t))
+          (throw t))))))
 
 (defn- get-handler [handler schema host server-port]
   (reify HttpHandler
