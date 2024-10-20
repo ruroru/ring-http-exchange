@@ -97,10 +97,11 @@
         (set-response-headers exchange headers)
         (let [content-length (get-content-length body)]
           (.sendResponseHeaders exchange status content-length))
-        (with-open [out (.getResponseBody exchange)]
+        (let [out (.getResponseBody exchange)]
           (protocols/write-body-to-stream body response out))
         (catch Throwable t
-          (logger/error (.getMessage t)))))))
+          (logger/error (.getMessage t))
+          (throw t))))))
 
 (defn- get-handler [handler schema host server-port]
   (reify HttpHandler
