@@ -6,8 +6,7 @@ which is included in the JDK.
 
 The main motivation for this is to support starting a small HTTP
 server inside an application which itself isn't necessary primarily a
-web app, while avoiding adding any new dependencies on the classpath
-(apart from ring-core).
+web app, while avoiding adding any new major dependencies on the classpath.
 
 ## Usage
 
