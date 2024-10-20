@@ -22,4 +22,6 @@ jobs:
           CLOJARS_USER: ${{ secrets.CLOJARS_USER }}
           CLOJARS_PASS: ${{ secrets.CLOJARS_PASS }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: lein deploy clojars
+        run: |
+          export GPG_TTY=$(tty)
+          lein deploy clojars
