@@ -74,23 +74,25 @@
     (nil? body)
     (satisfies? protocols/StreamableResponseBody body)))
 
+(defn- get-response-for-exchange [handler request-map]
+  (try
+    (let [resp (handler request-map)]
+      (if (supported-body? (:body resp))
+        resp
+        (do
+          (logger/error (:body resp) " must implement StreamableResponseBody protocol.")
+          (throw (Exception. "Illegal body type.")))))
+
+    (catch Throwable t
+      (logger/error (.getMessage ^Throwable t))
+      {:status  500
+       :body    internal-server-error
+       :headers {content-type text-html}})))
+
 (defn- handle-exchange [^HttpExchange exchange handler schema host port]
   (with-open [exchange exchange]
-    (let [{:keys [status body headers] :as response}
-          (try
-            (let [resp (handler (http-exchange->request-map exchange schema host port))]
-              (if (supported-body? (:body resp))
-                resp
-                (do
-                  (logger/error (:body resp) " must implement StreamableResponseBody protocol.")
-                  (throw (Exception. "Illegal body type.")))))
-
-            (catch Throwable t
-              (logger/error (.getMessage ^Throwable t))
-              {:status  500
-               :body    internal-server-error
-               :headers {content-type text-html}}))]
-
+    (let [request-map (http-exchange->request-map exchange schema host port)
+          {:keys [status body headers] :as response} (get-response-for-exchange handler request-map)]
       (try
         (set-response-headers exchange headers)
         (let [content-length (get-content-length body)]
