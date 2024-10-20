@@ -3,7 +3,7 @@
             [clojure.tools.logging :as logger]
             [ring.core.protocols :as protocols])
   (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsServer)
-           (java.io File)
+           (java.io File InputStream)
            (java.net InetSocketAddress)
            (java.util List)
            (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
@@ -67,18 +67,25 @@
     (instance? byte-array-class body) (alength ^"[B" body)
     :else 0))
 
-(defn- not-supported-body? [body]
-  (not (satisfies? protocols/StreamableResponseBody body)))
+(defn- supported-body? [body]
+  (or
+    (string? body)
+    (instance? File body)
+    (instance? InputStream body)
+    (instance? byte-array-class body)
+    (nil? body)
+    (satisfies? protocols/StreamableResponseBody body)))
 
 (defn- handle-exchange [^HttpExchange exchange handler schema host port]
   (with-open [exchange exchange]
     (let [{:keys [status body headers] :as response}
           (try
             (let [resp (handler (http-exchange->request-map exchange schema host port))]
-              (when (not-supported-body? (:body resp))
-                (logger/error (:body resp) " must implement StreamableResponseBody protocol.")
-                (throw (Exception. "Illegal body type.")))
-              resp)
+              (if (supported-body? (:body resp))
+                resp
+                (do
+                  (logger/error (:body resp) " must implement StreamableResponseBody protocol.")
+                  (throw (Exception. "Illegal body type.")))))
 
             (catch Throwable t
               (logger/error (.getMessage ^Throwable t))
