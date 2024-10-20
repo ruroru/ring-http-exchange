@@ -8,8 +8,6 @@
            (java.util List)
            (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
 
-(set! *warn-on-reflection* true)
-
 (def ^:const ^:private byte-array-class (Class/forName "[B"))
 (def ^:const ^:private comma ",")
 (def ^:const ^:private content-type "Content-type")
