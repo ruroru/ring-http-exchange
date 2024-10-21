@@ -9,8 +9,12 @@
 
   :source-paths ["src/clojure"]
 
+  :deploy-repositories [["clojars" {:url      "https://repo.clojars.org"
+                                    :username :env/clojars_user
+                                    :password :env/clojars_pass}]]
+
   :profiles {:test {:resource-paths ["test/resources"]
-                    :global-vars {*warn-on-reflection* true}
+                    :global-vars    {*warn-on-reflection* true}
                     :source-paths   ["test/clojure"]
                     :dependencies   [
                                      [babashka/fs "0.5.22"]
