@@ -2,7 +2,10 @@ name: cd
 on:
   workflow_dispatch:
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yaml
   deploy:
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
