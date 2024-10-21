@@ -12,16 +12,16 @@ jobs:
         with:
           distribution: adopt
           java-version: 21
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
       - name: Install clojure tools
         uses: DeLaGuardo/setup-clojure@12.5
         with:
           lein: latest
+      - name: Configure GPG key
+        env:
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+        run: echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --import
       - name: Deploy clojar
         env:
           CLOJARS_USER: ${{ secrets.CLOJARS_USER }}
           CLOJARS_PASS: ${{ secrets.CLOJARS_PASS }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          export GPG_TTY=$(tty)
-          lein deploy clojars
+        run: lein deploy clojars
