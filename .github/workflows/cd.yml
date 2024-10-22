@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
 jobs:
   ci:
+    if: github.ref == 'refs/heads/master'
     uses: ./.github/workflows/ci.yaml
   deploy:
     needs: ci
