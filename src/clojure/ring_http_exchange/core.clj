@@ -23,7 +23,7 @@
     (.get header-list 0)
     (str/join comma header-list)))
 
-(defmacro get-request-headers [request-headers]
+(defmacro ^:private get-request-headers [request-headers]
   `(reduce
      (fn [ring-headers# header#]
        (assoc ring-headers#
@@ -32,7 +32,7 @@
      {}
      ~request-headers))
 
-(defmacro set-response-headers [exchange headers]
+(defmacro ^:private set-response-headers [exchange headers]
   `(let [response-headers# (.getResponseHeaders ~exchange)]
      (doseq [[k# v#] ~headers]
        (.add response-headers#
