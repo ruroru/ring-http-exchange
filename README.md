@@ -8,6 +8,8 @@ The main motivation for this is to support starting a small HTTP
 server inside an application which itself isn't necessary primarily a
 web app, while avoiding adding any new major dependencies on the classpath.
 
+[![Clojars Project](https://img.shields.io/clojars/v/org.clojars.jj/ring-http-exchange.svg)](https://clojars.org/org.clojars.jj/ring-http-exchange)
+
 ## Usage
 
 ``` clojure
