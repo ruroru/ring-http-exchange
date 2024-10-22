@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
 jobs:
   ci:
+    if: github.ref == 'refs/heads/master'
     uses: ./.github/workflows/ci.yaml
   deploy:
     needs: ci
@@ -22,7 +23,7 @@ jobs:
       - name: Configure GPG key
         env:
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
-        run: echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --import
+        run: echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --import >/dev/null 2>/dev/null
       - name: Deploy clojar
         env:
           CLOJARS_USER: ${{ secrets.CLOJARS_USER }}

@@ -11,8 +11,8 @@
 (def ^:const ^:private byte-array-class (Class/forName "[B"))
 (def ^:const ^:private comma ",")
 (def ^:const ^:private content-type "Content-type")
-(def ^:const ^:private http-schema :http)
-(def ^:const ^:private https-schema :https)
+(def ^:const ^:private http-scheme :http)
+(def ^:const ^:private https-scheme :https)
 (def ^:const ^:private index-path "/")
 (def ^:const ^:private internal-server-error "Internal Server Error")
 (def ^:const ^:private localhost "127.0.0.1")
@@ -23,7 +23,7 @@
     (.get header-list 0)
     (str/join comma header-list)))
 
-(defmacro get-request-headers [request-headers]
+(defmacro ^:private get-request-headers [request-headers]
   `(reduce
      (fn [ring-headers# header#]
        (assoc ring-headers#
@@ -32,7 +32,7 @@
      {}
      ~request-headers))
 
-(defmacro set-response-headers [exchange headers]
+(defmacro ^:private set-response-headers [exchange headers]
   `(let [response-headers# (.getResponseHeaders ~exchange)]
      (doseq [[k# v#] ~headers]
        (.add response-headers#
@@ -45,13 +45,13 @@
   (memoize (fn [request-method]
              (keyword (.toLowerCase ^String request-method)))))
 
-(defn- http-exchange->request-map [^HttpExchange exchange schema host port]
+(defn- http-exchange->request-map [scheme host port ^HttpExchange exchange]
   {:server-port     port
    :server-name     host
    :remote-addr     (.getHostString (.getRemoteAddress exchange))
    :uri             (.getPath (.getRequestURI exchange))
    :query-string    (.getQuery (.getRequestURI exchange))
-   :scheme          schema
+   :scheme          scheme
    :request-method  (get-request-method (.getRequestMethod exchange))
    :protocol        (.getProtocol exchange)
    :headers         (get-request-headers (into {} (.getRequestHeaders exchange)))
@@ -89,10 +89,10 @@
        :body    internal-server-error
        :headers {content-type text-html}})))
 
-(defn- handle-exchange [^HttpExchange exchange handler schema host port]
+(defn- handle-exchange [^HttpExchange exchange handler scheme host port]
   (with-open [exchange exchange]
-    (let [request-map (http-exchange->request-map exchange schema host port)
-          {:keys [status body headers] :as response} (get-response-for-exchange handler request-map)]
+    (let [{:keys [status body headers] :as response} (->> (http-exchange->request-map scheme host port exchange)
+                                                          (get-response-for-exchange handler))]
       (try
         (set-response-headers exchange headers)
         (let [content-length (get-content-length body)]
@@ -103,21 +103,21 @@
           (logger/error (.getMessage t))
           (throw t))))))
 
-(defn- get-handler [handler schema host server-port]
+(defn- get-handler [handler scheme host server-port]
   (reify HttpHandler
     (handle [_ exchange]
-      (handle-exchange exchange handler schema host server-port))))
+      (handle-exchange exchange handler scheme host server-port))))
 
 (defn- get-server
   ([host port handler]
    (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)]
-     (.createContext server index-path (get-handler handler http-schema host port))
+     (.createContext server index-path (get-handler handler http-scheme host port))
      server))
   ([host port handler ssl-context]
    (if ssl-context
      (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
        (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-       (.createContext server index-path (get-handler handler https-schema host port))
+       (.createContext server index-path (get-handler handler https-scheme host port))
        server)
      (get-server host port handler))))
 
