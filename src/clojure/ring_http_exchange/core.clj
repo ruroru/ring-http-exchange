@@ -45,7 +45,7 @@
   (memoize (fn [request-method]
              (keyword (.toLowerCase ^String request-method)))))
 
-(defn- http-exchange->request-map [scheme host port ^HttpExchange exchange]
+(defn- get-exchange-request-map [scheme host port ^HttpExchange exchange]
   {:server-port     port
    :server-name     host
    :remote-addr     (.getHostString (.getRemoteAddress exchange))
@@ -74,7 +74,7 @@
     (nil? body)
     (satisfies? protocols/StreamableResponseBody body)))
 
-(defn- get-response-for-exchange [handler request-map]
+(defn- get-exchange-response [handler request-map]
   (try
     (let [resp (handler request-map)]
       (if (supported-body? (:body resp))
@@ -89,24 +89,24 @@
        :body    internal-server-error
        :headers {content-type text-html}})))
 
-(defn- handle-exchange [^HttpExchange exchange handler scheme host port]
-  (with-open [exchange exchange]
-    (let [{:keys [status body headers] :as response} (->> (http-exchange->request-map scheme host port exchange)
-                                                          (get-response-for-exchange handler))]
-      (try
-        (set-response-headers exchange headers)
-        (let [content-length (get-content-length body)]
-          (.sendResponseHeaders exchange status content-length))
-        (let [out (.getResponseBody exchange)]
-          (protocols/write-body-to-stream body response out))
-        (catch Throwable t
-          (logger/error (.getMessage t))
-          (throw t))))))
+(defn- send-exchange-response [exchange {:keys [headers status body] :as response}]
+  (try
+    (set-response-headers exchange headers)
+    (let [content-length (get-content-length body)]
+      (.sendResponseHeaders exchange status content-length))
+    (let [out (.getResponseBody exchange)]
+      (protocols/write-body-to-stream body response out))
+    (catch Throwable t
+      (logger/error (.getMessage t))
+      (throw t))))
 
-(defn- get-handler [handler scheme host server-port]
+(defn- get-handler [handler scheme host port]
   (reify HttpHandler
     (handle [_ exchange]
-      (handle-exchange exchange handler scheme host server-port))))
+      (with-open [exchange exchange]
+        (->> (get-exchange-request-map scheme host port exchange)
+             (get-exchange-response handler)
+             (send-exchange-response exchange))))))
 
 (defn- get-server
   ([host port handler]
