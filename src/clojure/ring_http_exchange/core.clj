@@ -71,8 +71,8 @@
     (instance? File body)
     (instance? InputStream body)
     (instance? byte-array-class body)
-    (nil? body)
-    (satisfies? protocols/StreamableResponseBody body)))
+    (satisfies? protocols/StreamableResponseBody body)
+    (nil? body)))
 
 (defn- get-exchange-response [handler request-map]
   (try
@@ -89,7 +89,7 @@
        :body    internal-server-error
        :headers {content-type text-html}})))
 
-(defn- send-exchange-response [exchange {:keys [headers status body] :as response}]
+(defn- send-exchange-response [^HttpExchange exchange {:keys [headers status body] :as response}]
   (try
     (set-response-headers exchange headers)
     (let [content-length (get-content-length body)]
@@ -124,7 +124,7 @@
 (defn stop-http-server
   "Stops a com.sun.net.httpserver.HttpServer with an optional
   delay (in seconds) to allow active request to finish."
-  ([server]
+  ([^HttpServer server]
    (stop-http-server server 0))
   ([^HttpServer server delay]
    (doto server (.stop delay))))
