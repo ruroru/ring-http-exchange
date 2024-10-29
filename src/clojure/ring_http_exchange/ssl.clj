@@ -4,7 +4,7 @@
            (javax.net.ssl KeyManagerFactory SSLContext TrustManagerFactory)))
 
 
-(defn- load-keystore [keystore key-password]
+(defn- load-keystore [^KeyStore keystore ^String key-password]
   (with-open [in (io/input-stream keystore)]
     (doto (KeyStore/getInstance (KeyStore/getDefaultType))
       (.load in (.toCharArray key-password)))))

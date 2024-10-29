@@ -2,11 +2,7 @@ name: cd
 on:
   workflow_dispatch:
 jobs:
-  ci:
-    if: github.ref == 'refs/heads/master'
-    uses: ./.github/workflows/ci.yaml
   deploy:
-    needs: ci
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,8 +20,20 @@ jobs:
         env:
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
         run: echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --import >/dev/null 2>/dev/null
-      - name: Deploy clojar
+      - name: Step patch version for release
+        run: lein bump patch
+      - name: push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Stepping project version to prepare it for release
+      - name: Deploy to clojars
         env:
           CLOJARS_USER: ${{ secrets.CLOJARS_USER }}
           CLOJARS_PASS: ${{ secrets.CLOJARS_PASS }}
         run: lein deploy clojars
+      - name: Bump project version to snapshot
+        run: lein bump dev
+      - name: push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Stepping project version for the next development cycle

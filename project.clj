@@ -1,4 +1,4 @@
-(defproject org.clojars.jj/ring-http-exchange "1.0.3"
+(defproject org.clojars.jj/ring-http-exchange "1.0.3-SNAPSHOT"
   :description "Ring adapter for com.sun.net.httpserver"
   :url "https://github.com/ruroru/ring-http-exchange"
   :license {:name "Eclipse Public License"
@@ -23,4 +23,5 @@
                                      [clj-http "3.13.0"]
                                      ]}}
 
-  :plugins [[lein-ancient "0.7.0"]])
+  :plugins [[org.clojars.jj/bump "1.0.0"]
+            [lein-ancient "0.7.0"]])
