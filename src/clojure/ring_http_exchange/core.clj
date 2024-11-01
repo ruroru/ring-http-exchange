@@ -3,7 +3,7 @@
             [clojure.tools.logging :as logger]
             [ring.core.protocols :as protocols])
   (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsServer)
-           (java.io File InputStream)
+           (java.io File FileInputStream InputStream OutputStream)
            (java.net InetSocketAddress)
            (java.util List)
            (java.util.concurrent Executors)))
@@ -58,47 +58,65 @@
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
 
-(defn- get-content-length [body]
-  (cond
-    (string? body) (.length ^String body)
-    (instance? File body) (.length ^File body)
-    (instance? byte-array-class body) (alength ^"[B" body)
-    :else 0))
-
-(defn- supported-body? [body]
-  (or
-    (string? body)
-    (instance? File body)
-    (instance? InputStream body)
-    (instance? byte-array-class body)
-    (satisfies? protocols/StreamableResponseBody body)
-    (nil? body)))
-
 (defn- get-exchange-response [handler request-map]
-  (try
-    (let [resp (handler request-map)]
-      (if (supported-body? (:body resp))
-        resp
-        (do
-          (logger/error (:body resp) " must implement StreamableResponseBody protocol.")
-          (throw (Exception. "Illegal body type.")))))
-
-    (catch Throwable t
-      (logger/error (.getMessage ^Throwable t))
-      {:status  500
-       :body    internal-server-error
-       :headers {content-type text-html}})))
+  (try (handler request-map)
+       (catch Throwable t
+         (logger/error (.getMessage ^Throwable t))
+         {:status  500
+          :body    internal-server-error
+          :headers {content-type text-html}})))
 
 (defn- send-exchange-response [^HttpExchange exchange {:keys [headers status body] :as response}]
-  (try
-    (set-response-headers exchange headers)
-    (let [content-length (get-content-length body)]
-      (.sendResponseHeaders exchange status content-length))
-    (let [out (.getResponseBody exchange)]
-      (protocols/write-body-to-stream body response out))
-    (catch Throwable t
-      (logger/error (.getMessage t))
-      (throw t))))
+  (cond
+    (string? body)
+    (do
+      (set-response-headers exchange headers)
+      (let [content-length (.length ^String body)]
+        (.sendResponseHeaders exchange status content-length))
+      (let [body-bytes (.getBytes ^String body)]
+        (with-open [out ^OutputStream (.getResponseBody exchange)]
+          (.write ^OutputStream out body-bytes))))
+
+    (instance? File body)
+    (do
+      (set-response-headers exchange headers)
+      (let [content-length (.length ^File body)]
+        (.sendResponseHeaders exchange status content-length))
+      (with-open [file-input-stream (FileInputStream. ^File body)
+                  out ^OutputStream (.getResponseBody exchange)]
+        (.transferTo ^FileInputStream file-input-stream out)))
+
+    (instance? InputStream body)
+    (do
+      (set-response-headers exchange headers)
+      (.sendResponseHeaders exchange status 0)
+      (with-open [out ^OutputStream (.getResponseBody exchange)]
+        (.transferTo ^InputStream body out))
+      (.close ^InputStream body))
+
+    (instance? byte-array-class body)
+    (do
+      (set-response-headers exchange headers)
+      (let [content-length (alength ^"[B" body)]
+        (.sendResponseHeaders exchange status content-length))
+      (with-open [out ^OutputStream (.getResponseBody exchange)]
+        (.write ^OutputStream out ^"[B" body)))
+
+    (satisfies? protocols/StreamableResponseBody body)
+    (do
+      (set-response-headers exchange headers)
+      (.sendResponseHeaders exchange status 0)
+      (with-open [out ^OutputStream (.getResponseBody exchange)]
+        (protocols/write-body-to-stream body response out)))
+
+    :else
+    (do
+      (set-response-headers exchange {content-type text-html})
+      (let [content-length (.length ^String internal-server-error)]
+        (.sendResponseHeaders exchange 500 content-length))
+      (let [body-bytes (.getBytes ^String internal-server-error)]
+        (with-open [out ^OutputStream (.getResponseBody exchange)]
+          (.write ^OutputStream out body-bytes))))))
 
 (defn- get-handler [handler scheme host port]
   (reify HttpHandler
