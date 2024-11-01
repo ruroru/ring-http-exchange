@@ -6,7 +6,7 @@
            (java.io File InputStream)
            (java.net InetSocketAddress)
            (java.util List)
-           (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
+           (java.util.concurrent Executors)))
 
 (def ^:const ^:private byte-array-class (Class/forName "[B"))
 (def ^:const ^:private comma ",")
@@ -135,45 +135,24 @@
 
   :port                 - the port to listen on (defaults to 8080)
   :host                 - the hostname to listen on (defaults to 127.0.0.1)
-  :max-threads          - the maximum number of threads to use (default 50)
-  :min-threads          - the minimum number of threads to use (default 8)
-  :max-queued-requests  - the maximum number of requests to be queued (default 1024)
-  :thread-idle-timeout  - Set the maximum thread idle time. Threads that are idle
-                          for longer than this period may be stopped (default 60000)
   :ssl-context          - the ssl context, that is used in https server
   :executor             - executor to use in HttpServer, will default to ThreadPoolExecutor"
 
-  [handler {:keys [
-                   host
+  [handler {:keys [host
                    port
-                   min-threads
-                   max-threads
-                   max-queued-requests
-                   thread-idle-timeout
                    ssl-context
-                   executor
-                   ]
-            :or   {host                localhost
-                   port                8080
-                   min-threads         8
-                   max-threads         50
-                   max-queued-requests 1024
-                   thread-idle-timeout 60000
-                   ssl-context         nil
-                   executor            nil
-                   }}]
+                   executor]
+            :or   {host        localhost
+                   port        8080
+                   ssl-context nil
+                   executor    (Executors/newCachedThreadPool)}}]
   (let [^HttpServer server (if ssl-context
                              (get-server host port handler ssl-context)
                              (get-server host port handler))]
-    (if executor
-      (.setExecutor server executor)
-      (.setExecutor server (ThreadPoolExecutor. min-threads
-                                                max-threads
-                                                thread-idle-timeout
-                                                TimeUnit/MILLISECONDS
-                                                (ArrayBlockingQueue. max-queued-requests))))
     (try
-      (doto server .start)
+      (doto server
+        (.setExecutor executor)
+        (.start))
       (catch Throwable t
         (logger/error (.getMessage t))
         (throw t)))))

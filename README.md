@@ -1,7 +1,8 @@
 # ring-http-exchange
 
 Clojure [ring](https://github.com/ring-clojure/ring) adapter for
-[`com.sun.net.httpserver.HttpServer`](https://docs.oracle.com/javase/8/docs/jre/api/net/httpserver/spec/com/sun/net/httpserver/HttpServer.html)
+[
+`com.sun.net.httpserver.HttpServer`](https://docs.oracle.com/javase/8/docs/jre/api/net/httpserver/spec/com/sun/net/httpserver/HttpServer.html)
 which is included in the JDK.
 
 The main motivation for this is to support starting a small HTTP
@@ -42,21 +43,16 @@ web app, while avoiding adding any new major dependencies on the classpath.
 
 ### Server configuration
 
-| Property              | Description                                                                              | Default value |
-|-----------------------|------------------------------------------------------------------------------------------|---------------|
-| `host`                | Host name                                                                                | 127.0.0.1     | 
-| `port`                | Application port                                                                         | 8080          |
-| `executor`            | External Executor to be used, if none provided  ThreadPoolExecutor shall be used         | nil           |
-| `max-threads`         | Max threads for ThreadPoolExecutor                                                       | 50            |
-| `min-threads`         | Min threads for ThreadPoolExecutor                                                       | 8             |
-| `max-queued-requests` | Max number of requests for ThreadPoolExecutor                                            | 1024          |                                           
-| `thread-idle-timeout` | Thread idle timeout in milliseconds for ThreadPoolExecutor, after which thread will stop | 60000         |
-| `ssl-context`         | Ssl context to be used in https configurator                                             | nil           |
+| Property      | Description                                  | Default value       |
+|---------------|----------------------------------------------|---------------------|
+| `host`        | Host name                                    | 127.0.0.1           | 
+| `port`        | Application port                             | 8080                |
+| `executor`    | Executor to be used                          | CachedThreadPool    |
+| `ssl-context` | Ssl context to be used in https configurator | nil                 |
 
 ### Limitations
 
 * `Transfer-Encoding` header will be set to `chunked`, if it is not possible to get length of the body.
-
 
 ## License
 
