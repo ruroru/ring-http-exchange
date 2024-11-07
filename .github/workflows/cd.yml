@@ -13,7 +13,7 @@ jobs:
           distribution: adopt
           java-version: 21
       - name: Install clojure tools
-        uses: DeLaGuardo/setup-clojure@12.5
+        uses: DeLaGuardo/setup-clojure@12.6
         with:
           lein: latest
       - name: Test
