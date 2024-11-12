@@ -17,7 +17,7 @@
                     :global-vars    {*warn-on-reflection* true}
                     :source-paths   ["test/clojure"]
                     :dependencies   [
-                                     [org.babashka/http-client "0.4.21"]
+                                     [org.babashka/http-client "0.4.22"]
                                      [criterium "0.4.6"]
                                      [babashka/fs "0.5.22"]
                                      [clj-http "3.13.0"]
