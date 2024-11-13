@@ -210,7 +210,7 @@
                                           :headers {}
                                           :body    (str (assoc
                                                           (dissoc req :body)
-                                                          :headers (dissoc (:headers req) "user-agent")))})
+                                                          :headers (dissoc (:headers req) "User-agent")))})
                                        server-config)
         response (client/get (format "http://localhost:%s/" (:port server-config)))]
     (is (= (:status response) 200))
@@ -223,7 +223,9 @@
         expected-request-map {:ssl-client-cert nil,
                               :protocol        "HTTP/1.1",
                               :remote-addr     "127.0.0.1",
-                              :headers         {"accept-encoding" "gzip, deflate", "connection" "close", "host" "localhost:8083"},
+                              :headers         {"Accept-encoding" "gzip, deflate",
+                                                "Connection" "close",
+                                                "Host" "localhost:8083"},
                               :server-port     8083, :uri "/",
                               :server-name     "127.0.0.1",
                               :query-string    nil,
@@ -234,9 +236,9 @@
 (deftest test-request-map-head-request
   (let [server-config {:host "localhost"
                        :port 8083}
-        expected-request-map {:headers         {"accept-encoding" "gzip, deflate"
-                                                "connection"      "close"
-                                                "host"            "localhost:8083"}
+        expected-request-map {:headers         {"Accept-encoding" "gzip, deflate"
+                                                "Connection"      "close"
+                                                "Host"            "localhost:8083"}
                               :protocol        "HTTP/1.1"
                               :query-string    nil
                               :remote-addr     "127.0.0.1"
@@ -252,11 +254,11 @@
   (let [server-config {:host "localhost"
                        :port 8083}
         expected-request-map {:body            "hello world"
-                              :headers         {"accept-encoding" "gzip, deflate"
-                                                "connection"      "close"
-                                                "content-length"  "11"
-                                                "content-type"    "text/plain; charset=UTF-8"
-                                                "host"            "localhost:8083"}
+                              :headers         {"Accept-encoding" "gzip, deflate"
+                                                "Connection"      "close"
+                                                "Content-length"  "11"
+                                                "Content-type"    "text/plain; charset=UTF-8"
+                                                "Host"            "localhost:8083"}
                               :protocol        "HTTP/1.1"
                               :query-string    "q=query&s=string"
                               :remote-addr     "127.0.0.1"
@@ -270,9 +272,9 @@
                                            {:status  200
                                             :headers {}
                                             :body    (str (assoc
-                                                            (dissoc req "user-agent")
+                                                            (dissoc req "User-agent")
                                                             :body (String. (.readAllBytes ^FixedLengthInputStream (:body req)))
-                                                            :headers (dissoc (:headers req) "user-agent")))})
+                                                            :headers (dissoc (:headers req) "User-agent")))})
                                          server-config)
           response (client/put (format "http://localhost:%s/hello-world?q=query&s=string" (:port server-config)) {:body "hello world"})]
       (is (= (:status response) 200))
@@ -293,7 +295,7 @@
 
 (deftest not-supported-body-returns-500-internal-server-error
   (let [server-response {:status  200
-                         :headers {"Content-type" "text/html; charset=utf-8"}
+                         :headers {"Content-type"   "text/htm1l"}
                          :body    1}
 
         expected-response {:status  500
