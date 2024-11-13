@@ -2,10 +2,10 @@
   (:require [clojure.string :as str]
             [clojure.tools.logging :as logger]
             [ring.core.protocols :as protocols])
-  (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsServer)
+  (:import (com.sun.net.httpserver Headers HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsServer)
            (java.io File FileInputStream InputStream OutputStream)
            (java.net InetSocketAddress)
-           (java.util List)
+           (java.util Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry List Set)
            (java.util.concurrent Executors)))
 
 (def ^:const ^:private byte-array-class (Class/forName "[B"))
@@ -23,27 +23,27 @@
     (.get header-list 0)
     (str/join comma header-list)))
 
-(defmacro ^:private get-request-headers [request-headers]
-  `(reduce
-     (fn [ring-headers# header#]
-       (assoc ring-headers#
-         (.toLowerCase ^String (first header#))
-         (get-header-value (second header#))))
-     {}
-     ~request-headers))
 
-(defmacro ^:private set-response-headers [exchange headers]
-  `(let [response-headers# (.getResponseHeaders ~exchange)]
-     (doseq [[k# v#] ~headers]
-       (.add response-headers#
-             (name k#)
-             (if (instance? String v#)
-               v#
-               (str v#))))))
+(defn- get-request-headers [^Set entry-set]
+  (reduce
+    (fn [m ^Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry header]
+      (let [key (.getKey  header)
+            value (get-header-value (.getValue header))]
+        (assoc m key value)))
+    {}
+    entry-set))
 
-(def ^:private get-request-method
-  (memoize (fn [request-method]
-             (keyword (.toLowerCase ^String request-method)))))
+(defn- ^:private set-response-headers [^Headers response-headers resp-headers]
+  (doseq [key-value resp-headers]
+    (.add response-headers (name (first key-value))
+          (let [value (second key-value)]
+            (if
+              (instance? String value)
+              value
+              (str value))))))
+
+(defn- get-request-method [request-method]
+  (keyword (.toLowerCase ^String request-method)))
 
 (defn- get-exchange-request-map [scheme host port ^HttpExchange exchange]
   {:server-port     port
@@ -54,7 +54,7 @@
    :scheme          scheme
    :request-method  (get-request-method (.getRequestMethod exchange))
    :protocol        (.getProtocol exchange)
-   :headers         (get-request-headers (into {} (.getRequestHeaders exchange)))
+   :headers         (get-request-headers (.entrySet (.getRequestHeaders exchange)))
    :ssl-client-cert nil
    :body            (.getRequestBody exchange)})
 
@@ -66,57 +66,59 @@
           :body    internal-server-error
           :headers {content-type text-html}})))
 
-(defn- send-exchange-response [^HttpExchange exchange {:keys [headers status body] :as response}]
-  (cond
-    (string? body)
-    (do
-      (set-response-headers exchange headers)
-      (let [content-length (.length ^String body)]
-        (.sendResponseHeaders exchange status content-length))
-      (let [body-bytes (.getBytes ^String body)]
-        (with-open [out ^OutputStream (.getResponseBody exchange)]
-          (.write ^OutputStream out body-bytes))))
+(defn- send-string [^HttpExchange exchange response body]
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (let [content-length (.length ^String body)]
+    (.sendResponseHeaders exchange (:status response) content-length))
+  (let [body-bytes (.getBytes ^String body)]
+    (with-open [out ^OutputStream (.getResponseBody exchange)]
+      (.write ^OutputStream out body-bytes))))
 
-    (instance? File body)
-    (do
-      (set-response-headers exchange headers)
-      (let [content-length (.length ^File body)]
-        (.sendResponseHeaders exchange status content-length))
-      (with-open [file-input-stream (FileInputStream. ^File body)
-                  out ^OutputStream (.getResponseBody exchange)]
-        (.transferTo ^FileInputStream file-input-stream out)))
+(defn- send-file [^HttpExchange exchange response body]
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (let [content-length (.length ^File body)]
+    (.sendResponseHeaders exchange (:status response) content-length))
+  (with-open [file-input-stream (FileInputStream. ^File body)
+              out ^OutputStream (.getResponseBody exchange)]
+    (.transferTo ^FileInputStream file-input-stream out)))
 
-    (instance? InputStream body)
-    (do
-      (set-response-headers exchange headers)
-      (.sendResponseHeaders exchange status 0)
-      (with-open [out ^OutputStream (.getResponseBody exchange)]
-        (.transferTo ^InputStream body out))
-      (.close ^InputStream body))
+(defn- send-input-stream [^HttpExchange exchange response body]
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (.sendResponseHeaders exchange (:status response) 0)
+  (with-open [out ^OutputStream (.getResponseBody exchange)]
+    (.transferTo ^InputStream body out))
+  (.close ^InputStream body))
 
-    (instance? byte-array-class body)
-    (do
-      (set-response-headers exchange headers)
-      (let [content-length (alength ^"[B" body)]
-        (.sendResponseHeaders exchange status content-length))
-      (with-open [out ^OutputStream (.getResponseBody exchange)]
-        (.write ^OutputStream out ^"[B" body)))
+(defn- send-byte-array [^HttpExchange exchange response body]
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (let [content-length (alength ^"[B" body)]
+    (.sendResponseHeaders exchange (:status response) content-length))
+  (with-open [out ^OutputStream (.getResponseBody exchange)]
+    (.write ^OutputStream out ^"[B" body)))
 
-    (satisfies? protocols/StreamableResponseBody body)
-    (do
-      (set-response-headers exchange headers)
-      (.sendResponseHeaders exchange status 0)
-      (with-open [out ^OutputStream (.getResponseBody exchange)]
-        (protocols/write-body-to-stream body response out)))
+(defn- send-streamable [^HttpExchange exchange response body]
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (.sendResponseHeaders exchange (:status response) 0)
+  (with-open [out ^OutputStream (.getResponseBody exchange)]
+    (protocols/write-body-to-stream body response out)))
 
-    :else
-    (do
-      (set-response-headers exchange {content-type text-html})
-      (let [content-length (.length ^String internal-server-error)]
-        (.sendResponseHeaders exchange 500 content-length))
-      (let [body-bytes (.getBytes ^String internal-server-error)]
-        (with-open [out ^OutputStream (.getResponseBody exchange)]
-          (.write ^OutputStream out body-bytes))))))
+(defn- send-error [^HttpExchange exchange]
+  (set-response-headers (.getResponseHeaders exchange) {content-type text-html})
+  (let [content-length (.length ^String internal-server-error)]
+    (.sendResponseHeaders exchange 500 content-length))
+  (let [body-bytes (.getBytes ^String internal-server-error)]
+    (with-open [out ^OutputStream (.getResponseBody exchange)]
+      (.write ^OutputStream out body-bytes))))
+
+(defn- send-exchange-response [^HttpExchange exchange response]
+  (let [body (:body response)]
+    (cond
+      (string? body) (send-string exchange response body)
+      (instance? File body) (send-file exchange response body)
+      (instance? InputStream body) (send-input-stream exchange response body)
+      (instance? byte-array-class body) (send-byte-array exchange response body)
+      (satisfies? protocols/StreamableResponseBody body) (send-streamable exchange response body)
+      :else (send-error exchange))))
 
 (defn- get-handler [handler scheme host port]
   (reify HttpHandler

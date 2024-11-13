@@ -13,15 +13,17 @@
                                     :username :env/clojars_user
                                     :password :env/clojars_pass}]]
 
+  :jvm-opts ^:replace ["-Dclojure.compiler.direct-linking=true"
+                       "-Xmx2048m"
+                       "-server"]
+
   :profiles {:test {:resource-paths ["test/resources"]
                     :global-vars    {*warn-on-reflection* true}
                     :source-paths   ["test/clojure"]
-                    :dependencies   [
-                                     [org.babashka/http-client "0.4.22"]
+                    :dependencies   [[org.babashka/http-client "0.4.22"]
                                      [criterium "0.4.6"]
                                      [babashka/fs "0.5.22"]
-                                     [clj-http "3.13.0"]
-                                     ]}}
+                                     [clj-http "3.13.0"]]}}
 
   :plugins [[org.clojars.jj/bump "1.0.0"]
             [lein-ancient "0.7.0"]])
