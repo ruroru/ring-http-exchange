@@ -69,7 +69,7 @@
 (defn- send-string [^HttpExchange exchange response body]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (let [content-length (.length ^String body)]
-    (.sendResponseHeaders exchange (:status response) content-length))
+    (.sendResponseHeaders exchange (:status response 200) content-length))
   (let [body-bytes (.getBytes ^String body)]
     (with-open [out ^OutputStream (.getResponseBody exchange)]
       (.write ^OutputStream out body-bytes))))
@@ -77,14 +77,14 @@
 (defn- send-file [^HttpExchange exchange response body]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (let [content-length (.length ^File body)]
-    (.sendResponseHeaders exchange (:status response) content-length))
+    (.sendResponseHeaders exchange (:status response 200) content-length))
   (with-open [file-input-stream (FileInputStream. ^File body)
               out ^OutputStream (.getResponseBody exchange)]
     (.transferTo ^FileInputStream file-input-stream out)))
 
 (defn- send-input-stream [^HttpExchange exchange response body]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
-  (.sendResponseHeaders exchange (:status response) 0)
+  (.sendResponseHeaders exchange (:status response 200) 0)
   (with-open [out ^OutputStream (.getResponseBody exchange)]
     (.transferTo ^InputStream body out))
   (.close ^InputStream body))
@@ -92,13 +92,13 @@
 (defn- send-byte-array [^HttpExchange exchange response body]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (let [content-length (alength ^"[B" body)]
-    (.sendResponseHeaders exchange (:status response) content-length))
+    (.sendResponseHeaders exchange (:status response 200) content-length))
   (with-open [out ^OutputStream (.getResponseBody exchange)]
     (.write ^OutputStream out ^"[B" body)))
 
 (defn- send-streamable [^HttpExchange exchange response body]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
-  (.sendResponseHeaders exchange (:status response) 0)
+  (.sendResponseHeaders exchange (:status response 200) 0)
   (with-open [out ^OutputStream (.getResponseBody exchange)]
     (protocols/write-body-to-stream body response out)))
 
