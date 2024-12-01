@@ -23,6 +23,8 @@
     (.write output-stream ^bytes (.getBytes (name body)))
     (.close output-stream)))
 
+
+
 (defn- verify-response
   ([response-body expected-responses]
    (verify-response response-body {} expected-responses))
@@ -44,6 +46,14 @@
             (dissoc (:headers response) "Date")))
      (is (= (:body expected-responses) (:body response)))
      (server/stop-http-server server))))
+
+(defn verify-response-with-default-status [server-response expected-response]
+  (testing (str "Testing: " server-response)
+    (verify-response server-response expected-response))
+
+  (let [server-response-without-status (dissoc server-response :status)]
+    (testing (str "Testing: " server-response-without-status)
+      (verify-response server-response-without-status expected-response))))
 
 (deftest port-defaults-to-8080
   (let [server-response {:status  200
@@ -148,7 +158,7 @@
                            :headers {"Content-length" "15"
                                      "Content-type"   "text/html; charset=utf-8"}
                            :body    "hello from file"}]
-    (verify-response server-response expected-response)))
+    (verify-response-with-default-status server-response expected-response)))
 
 (deftest can-use-nil-as-response-body
   (let [server-response {:status  200
@@ -159,7 +169,7 @@
                            :headers {"Transfer-encoding" "chunked"
                                      "Content-type"      "text/html; charset=utf-8"}
                            :body    ""}]
-    (verify-response server-response expected-response)))
+    (verify-response-with-default-status server-response expected-response)))
 
 (deftest can-use-byte-array-as-response-body
   (let [server-response {:status  200
@@ -170,9 +180,9 @@
                            :headers {"Content-length" "11"
                                      "Content-type"   "text/html; charset=utf-8"}
                            :body    "hello world"}]
-    (verify-response server-response expected-response)))
+    (verify-response-with-default-status server-response expected-response)))
 
-(deftest can-use-input-stream-as-response-body-without-content-length-header
+(deftest can-use-input-stream-as-response-body
   (let [server-response {:status  201
                          :headers {"Content-type" "text/html; charset=utf-8"}
                          :body    (ByteArrayInputStream. (.getBytes "hello input stream"))}
@@ -182,6 +192,18 @@
                                      "Content-type"      "text/html; charset=utf-8"}
                            :body    "hello input stream"}]
     (verify-response server-response expected-response)))
+
+
+(deftest can-use-input-stream-as-response-body-without-response-status
+  (let [server-response {:headers {"Content-type" "text/html; charset=utf-8"}
+                         :body    (ByteArrayInputStream. (.getBytes "hello input stream"))}
+
+        expected-response {:status  200
+                           :headers {"Transfer-encoding" "chunked"
+                                     "Content-type"      "text/html; charset=utf-8"}
+                           :body    "hello input stream"}]
+    (verify-response server-response expected-response)))
+
 
 (deftest can-survive-exceptions-in-handler
   (let [port 8083
@@ -224,8 +246,8 @@
                               :protocol        "HTTP/1.1",
                               :remote-addr     "127.0.0.1",
                               :headers         {"Accept-encoding" "gzip, deflate",
-                                                "Connection" "close",
-                                                "Host" "localhost:8083"},
+                                                "Connection"      "close",
+                                                "Host"            "localhost:8083"},
                               :server-port     8083, :uri "/",
                               :server-name     "127.0.0.1",
                               :query-string    nil,
@@ -281,6 +303,8 @@
       (is (= expected-request-map (edn/read-string (:body response))))
       (server/stop-http-server server))))
 
+
+
 (deftest allow-setting-StreamableResponseBody
   (let [server-response {:status  200
                          :headers {"Content-type" "text/html; charset=utf-8"}
@@ -290,12 +314,12 @@
                            :headers {"Content-type"      "text/html; charset=utf-8"
                                      "Transfer-encoding" "chunked"}
                            :body    "false"}]
-    (verify-response server-response expected-response)))
+    (verify-response-with-default-status server-response expected-response)))
 
 
 (deftest not-supported-body-returns-500-internal-server-error
   (let [server-response {:status  200
-                         :headers {"Content-type"   "text/htm1l"}
+                         :headers {"Content-type" "text/htm1l"}
                          :body    1}
 
         expected-response {:status  500
