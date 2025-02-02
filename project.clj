@@ -25,5 +25,5 @@
                                      [babashka/fs "0.5.24"]
                                      [clj-http "3.13.0"]]}}
 
-  :plugins [[org.clojars.jj/bump "1.0.3"]
+  :plugins [[org.clojars.jj/bump "1.0.4"]
             [lein-ancient "0.7.0"]])
