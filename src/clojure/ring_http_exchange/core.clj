@@ -16,7 +16,11 @@
 (def ^:const ^:private internal-server-error "Internal Server Error")
 (def ^:const ^:private localhost "127.0.0.1")
 (def ^:const ^:private text-html "text/html")
-
+(def ^:const ^:private method-cache (into {}
+                                          (for [method ["get" "post" "put" "patch" "delete" "head" "options" "trace"]]
+                                            (let [uppercase-method (clojure.string/upper-case method)
+                                                  keyword-method (keyword method)]
+                                              [uppercase-method keyword-method]))))
 
 (defn- get-header-value [^List header-list]
   (if (= 1 (.size ^List header-list))
@@ -25,42 +29,40 @@
 
 
 (defn- get-request-headers [^Set entry-set]
-  (reduce
-    (fn [m ^Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry header]
-      (let [key (.getKey header)
-            value (get-header-value (.getValue header))]
-        (assoc m key value)))
-    {}
-    entry-set))
+  (persistent!
+    (reduce
+      (fn [m ^Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry header]
+        (let [key (.getKey header)
+              value (get-header-value (.getValue header))]
+          (assoc! m key value)))
+      (transient {})
+      entry-set)))
 
 
-(defn- ^:private set-response-headers [^Headers response-headers resp-headers]
-  (doseq [key-value resp-headers]
-    (.add response-headers (name (first key-value))
-          (let [value (second key-value)]
-            (if
-              (instance? String value)
-              value
-              (str value))))))
+(defn- set-response-headers [^Headers response-headers resp-headers]
+  (doseq [[k v] resp-headers]
+    (.add response-headers (name k)
+          (if (string? v) v (str v)))))
 
 
-(defn- get-request-method [request-method]
-  (keyword (.toLowerCase ^String request-method)))
+(defn- get-request-method [^String method]
+  (get method-cache method (keyword (.toLowerCase method))))
 
 
 (defn- get-exchange-request-map [scheme host port ^HttpExchange exchange]
-  (array-map
-    :server-port port
-    :server-name host
-    :remote-addr (.getHostString (.getRemoteAddress exchange))
-    :uri (.getPath (.getRequestURI exchange))
-    :query-string (.getQuery (.getRequestURI exchange))
-    :scheme scheme
-    :request-method (get-request-method (.getRequestMethod exchange))
-    :protocol (.getProtocol exchange)
-    :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
-    :ssl-client-cert nil
-    :body (.getRequestBody exchange)))
+  (let [uri (.getRequestURI exchange)]
+    (array-map
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method (.getRequestMethod exchange))
+      :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
+      :uri (.getPath uri)
+      :query-string (.getQuery uri)
+      :server-port port
+      :scheme scheme
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name host
+      :ssl-client-cert nil)))
 
 
 (defn- get-exchange-response [handler request-map]
@@ -151,7 +153,7 @@
    (if ssl-context
      (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
        (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-       (.createContext server index-path (get-handler handler :https   host port))
+       (.createContext server index-path (get-handler handler :https host port))
        server)
      (get-server host port handler))))
 
