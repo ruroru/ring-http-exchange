@@ -46,7 +46,7 @@
 
 
 (defn- get-request-method [^String method]
-  (get method-cache method (keyword (.toLowerCase method))))
+  (method-cache method (keyword (.toLowerCase method))))
 
 
 (defn- get-exchange-request-map [scheme host port ^HttpExchange exchange]
@@ -75,42 +75,42 @@
 
 
 (defn- send-string [^HttpExchange exchange response body]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
   (let [content-length (.length ^String body)]
-    (.sendResponseHeaders exchange (:status response 200) content-length))
+    (.sendResponseHeaders exchange (response :status 200) content-length))
   (let [body-bytes (.getBytes ^String body)]
     (with-open [out ^OutputStream (.getResponseBody exchange)]
       (.write ^OutputStream out body-bytes))))
 
 
 (defn- send-file [^HttpExchange exchange response body]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
   (let [content-length (.length ^File body)]
-    (.sendResponseHeaders exchange (:status response 200) content-length))
+    (.sendResponseHeaders exchange (response :status 200) content-length))
   (with-open [file-input-stream (FileInputStream. ^File body)
               out ^OutputStream (.getResponseBody exchange)]
     (.transferTo ^FileInputStream file-input-stream out)))
 
 
 (defn- send-input-stream [^HttpExchange exchange response body]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response))
-  (.sendResponseHeaders exchange (:status response 200) 0)
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
+  (.sendResponseHeaders exchange (response :status 200) 0)
   (with-open [out ^OutputStream (.getResponseBody exchange)]
     (.transferTo ^InputStream body out))
   (.close ^InputStream body))
 
 
 (defn- send-byte-array [^HttpExchange exchange response body]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
   (let [content-length (alength ^"[B" body)]
-    (.sendResponseHeaders exchange (:status response 200) content-length))
+    (.sendResponseHeaders exchange (response :status 200) content-length))
   (with-open [out ^OutputStream (.getResponseBody exchange)]
     (.write ^OutputStream out ^"[B" body)))
 
 
 (defn- send-streamable [^HttpExchange exchange response body]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response))
-  (.sendResponseHeaders exchange (:status response 200) 0)
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
+  (.sendResponseHeaders exchange (response :status 200) 0)
   (with-open [out ^OutputStream (.getResponseBody exchange)]
     (protocols/write-body-to-stream body response out)))
 
@@ -125,7 +125,7 @@
 
 
 (defn- send-exchange-response [^HttpExchange exchange response]
-  (let [body (:body response)]
+  (let [body (response :body)]
     (cond
       (string? body) (send-string exchange response body)
       (instance? File body) (send-file exchange response body)
