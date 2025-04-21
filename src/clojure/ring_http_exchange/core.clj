@@ -150,12 +150,10 @@
      (.createContext server index-path (get-handler handler :http host port))
      server))
   ([host port handler ssl-context]
-   (if ssl-context
-     (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
-       (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-       (.createContext server index-path (get-handler handler :https host port))
-       server)
-     (get-server host port handler))))
+   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
+     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+     (.createContext server index-path (get-handler handler :https host port))
+     server)))
 
 
 (defn stop-http-server
