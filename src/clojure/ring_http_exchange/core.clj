@@ -2,7 +2,7 @@
   (:require [clojure.string :as str]
             [clojure.tools.logging :as logger]
             [ring.core.protocols :as protocols])
-  (:import (com.sun.net.httpserver Headers HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsServer)
+  (:import (com.sun.net.httpserver Headers HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsExchange HttpsServer)
            (java.io File FileInputStream InputStream OutputStream)
            (java.net InetSocketAddress)
            (java.util Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry List Set)
@@ -49,7 +49,7 @@
   (method-cache method (keyword (.toLowerCase method))))
 
 
-(defn- get-exchange-request-map [scheme host port ^HttpExchange exchange]
+(defn- get-http-exchange-request-map [host port ^HttpExchange exchange]
   (let [uri (.getRequestURI exchange)]
     (array-map
       :body (.getRequestBody exchange)
@@ -58,7 +58,21 @@
       :uri (.getPath uri)
       :query-string (.getQuery uri)
       :server-port port
-      :scheme scheme
+      :scheme :http
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name host)))
+
+(defn- get-https-exchange-request-map [host port ^HttpsExchange exchange]
+  (let [uri (.getRequestURI exchange)]
+    (array-map
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method (.getRequestMethod exchange))
+      :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
+      :uri (.getPath uri)
+      :query-string (.getQuery uri)
+      :server-port port
+      :scheme :https
       :protocol (.getProtocol exchange)
       :remote-addr (.getHostString (.getRemoteAddress exchange))
       :server-name host
@@ -135,24 +149,27 @@
       :else (send-error exchange))))
 
 
-(defn- get-handler [handler scheme host port]
-  (reify HttpHandler
-    (handle [_ exchange]
-      (with-open [exchange exchange]
-        (->> (get-exchange-request-map scheme host port exchange)
-             (get-exchange-response handler)
-             (send-exchange-response exchange))))))
-
-
 (defn- get-server
   ([host port handler]
-   (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)]
-     (.createContext server index-path (get-handler handler :http host port))
+   (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)
+         handler (reify HttpHandler
+                   (handle [_ exchange]
+                     (with-open [exchange exchange]
+                       (->> (get-http-exchange-request-map host port exchange)
+                            (get-exchange-response handler)
+                            (send-exchange-response exchange)))))]
+     (.createContext server index-path handler)
      server))
   ([host port handler ssl-context]
-   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)]
+   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
+         handler (reify HttpHandler
+                   (handle [_ exchange]
+                     (with-open [exchange exchange]
+                       (->> (get-https-exchange-request-map host port exchange)
+                            (get-exchange-response handler)
+                            (send-exchange-response exchange)))))]
      (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-     (.createContext server index-path (get-handler handler :https host port))
+     (.createContext server index-path handler)
      server)))
 
 
