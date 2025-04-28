@@ -12,6 +12,7 @@
     [ring.core.protocols :as protocols])
   (:import (clojure.lang Keyword)
            (java.io ByteArrayInputStream File OutputStream)
+           (java.util Base64)
            (java.util.concurrent Executors)
            (sun.net.httpserver FixedLengthInputStream)))
 
@@ -23,7 +24,13 @@
     (.write output-stream ^bytes (.getBytes (name body)))
     (.close output-stream)))
 
-
+(defn- serialize-x509-certificate-array
+  [cert-array]
+  (if (= (count cert-array) 0)
+    :empty-cert
+    (map (fn [cert]
+           (let [bytes (.getEncoded cert)]
+             (String. (.encodeToString (Base64/getEncoder) bytes)))) cert-array)))
 
 (defn- verify-response
   ([response-body expected-responses]
@@ -243,51 +250,51 @@
   (let [server-config {:host "127.0.0.1"
                        :port 8083}
         expected-request-map {
-                              :protocol        "HTTP/1.1",
-                              :remote-addr     "127.0.0.1",
-                              :headers         {"Accept-encoding" "gzip, deflate",
-                                                "Connection"      "close",
-                                                "Host"            "localhost:8083"},
-                              :server-port     8083, :uri "/",
-                              :server-name     "127.0.0.1",
-                              :query-string    nil,
-                              :scheme          :http,
-                              :request-method  :get}]
+                              :protocol       "HTTP/1.1",
+                              :remote-addr    "127.0.0.1",
+                              :headers        {"Accept-encoding" "gzip, deflate",
+                                               "Connection"      "close",
+                                               "Host"            "localhost:8083"},
+                              :server-port    8083, :uri "/",
+                              :server-name    "127.0.0.1",
+                              :query-string   nil,
+                              :scheme         :http,
+                              :request-method :get}]
     (verify-request-map server-config expected-request-map)))
 
 (deftest test-request-map-head-request
   (let [server-config {:host "localhost"
                        :port 8083}
-        expected-request-map {:headers         {"Accept-encoding" "gzip, deflate"
-                                                "Connection"      "close"
-                                                "Host"            "localhost:8083"}
-                              :protocol        "HTTP/1.1"
-                              :query-string    nil
-                              :remote-addr     "127.0.0.1"
-                              :request-method  :get
-                              :scheme          :http
-                              :server-name     "localhost"
-                              :server-port     8083
-                              :uri             "/"}]
+        expected-request-map {:headers        {"Accept-encoding" "gzip, deflate"
+                                               "Connection"      "close"
+                                               "Host"            "localhost:8083"}
+                              :protocol       "HTTP/1.1"
+                              :query-string   nil
+                              :remote-addr    "127.0.0.1"
+                              :request-method :get
+                              :scheme         :http
+                              :server-name    "localhost"
+                              :server-port    8083
+                              :uri            "/"}]
     (verify-request-map server-config expected-request-map)))
 
 (deftest test-request-map-with-query-params
   (let [server-config {:host "localhost"
                        :port 8083}
-        expected-request-map {:body            "hello world"
-                              :headers         {"Accept-encoding" "gzip, deflate"
-                                                "Connection"      "close"
-                                                "Content-length"  "11"
-                                                "Content-type"    "text/plain; charset=UTF-8"
-                                                "Host"            "localhost:8083"}
-                              :protocol        "HTTP/1.1"
-                              :query-string    "q=query&s=string"
-                              :remote-addr     "127.0.0.1"
-                              :request-method  :put
-                              :scheme          :http
-                              :server-name     "localhost"
-                              :server-port     8083
-                              :uri             "/hello-world"}]
+        expected-request-map {:body           "hello world"
+                              :headers        {"Accept-encoding" "gzip, deflate"
+                                               "Connection"      "close"
+                                               "Content-length"  "11"
+                                               "Content-type"    "text/plain; charset=UTF-8"
+                                               "Host"            "localhost:8083"}
+                              :protocol       "HTTP/1.1"
+                              :query-string   "q=query&s=string"
+                              :remote-addr    "127.0.0.1"
+                              :request-method :put
+                              :scheme         :http
+                              :server-name    "localhost"
+                              :server-port    8083
+                              :uri            "/hello-world"}]
     (let [server (server/run-http-server (fn [req]
                                            {:status  200
                                             :headers {}
@@ -302,7 +309,9 @@
       (server/stop-http-server server))))
 
 
-(deftest test-https-request-map-with-query-params
+
+
+(deftest test-https-request-headers-with-invalid-certificates
   (let [server-config {:port        9443
                        :ssl-context (ssl/keystore->ssl-context (io/resource "keystore.jks") default-password (io/resource "truststore.jks") default-password)}
         expected-request-map {:body            ""
@@ -311,26 +320,29 @@
                                                 "Host"            "localhost:9443"}
                               :protocol        "HTTP/1.1"
                               :query-string    nil
-                              :remote-addr     "127.0.0.1"
                               :request-method  :get
                               :scheme          :https
                               :server-name     "127.0.0.1"
                               :server-port     9443
-                              :ssl-client-cert nil
+                              :ssl-client-cert :empty-cert
                               :uri             "/"}]
     (let [server (server/run-http-server (fn [req]
                                            {:status  200
                                             :headers {}
                                             :body    (str (assoc
-                                                            (dissoc req "User-agent")
+                                                            req
                                                             :body (String. (.readAllBytes ^FixedLengthInputStream (:body req)))
+                                                            :ssl-client-cert (serialize-x509-certificate-array (:ssl-client-cert req))
                                                             :headers (dissoc (:headers req) "User-agent")))})
                                          server-config)
           response (client/get (format "https://localhost:%s/" (:port server-config))
                                {:insecure? true :throw-exceptions false})
           ]
       (is (= (:status response) 200))
-      (is (= expected-request-map (edn/read-string (:body response))))
+      (is (= expected-request-map (dissoc
+                                    (edn/read-string (:body response))
+                                    :remote-addr
+                                    )))
       (server/stop-http-server server))))
 
 

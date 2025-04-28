@@ -5,11 +5,11 @@
   (:import (com.sun.net.httpserver Headers HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsExchange HttpsServer)
            (java.io File FileInputStream InputStream OutputStream)
            (java.net InetSocketAddress)
+           (java.security.cert X509Certificate)
            (java.util Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry List Set)
-           (java.util.concurrent Executors)))
+           (java.util.concurrent Executors)
+           (javax.net.ssl SSLSession)))
 
-
-(def ^:const ^:private byte-array-class (Class/forName "[B"))
 (def ^:const ^:private comma ",")
 (def ^:const ^:private content-type "Content-type")
 (def ^:const ^:private index-path "/")
@@ -49,6 +49,35 @@
   (method-cache method (keyword (.toLowerCase method))))
 
 
+(defn- get-certificate [^SSLSession session]
+  (try
+    (map
+      (fn [certificate]
+        (cast X509Certificate certificate))
+      (.getPeerCertificates session))
+    (catch Exception t
+      (logger/debugf "Unable to parse certificate due to: %s" (.getMessage ^Throwable t))
+      (make-array X509Certificate 0))))
+
+(defn- get-https-exchange-request-map [host port ^HttpsExchange exchange]
+  (let [uri (.getRequestURI exchange)
+        session ^SSLSession (.getSSLSession exchange)
+        certificates (get-certificate session)]
+
+    (array-map
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method (.getRequestMethod exchange))
+      :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
+      :uri (.getPath uri)
+      :query-string (.getQuery uri)
+      :server-port port
+      :scheme :https
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name host
+      :ssl-client-cert certificates)))
+
+
 (defn- get-http-exchange-request-map [host port ^HttpExchange exchange]
   (let [uri (.getRequestURI exchange)]
     (array-map
@@ -62,21 +91,6 @@
       :protocol (.getProtocol exchange)
       :remote-addr (.getHostString (.getRemoteAddress exchange))
       :server-name host)))
-
-(defn- get-https-exchange-request-map [host port ^HttpsExchange exchange]
-  (let [uri (.getRequestURI exchange)]
-    (array-map
-      :body (.getRequestBody exchange)
-      :request-method (get-request-method (.getRequestMethod exchange))
-      :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
-      :uri (.getPath uri)
-      :query-string (.getQuery uri)
-      :server-port port
-      :scheme :https
-      :protocol (.getProtocol exchange)
-      :remote-addr (.getHostString (.getRemoteAddress exchange))
-      :server-name host
-      :ssl-client-cert nil)))
 
 
 (defn- get-exchange-response [handler request-map]
@@ -144,7 +158,7 @@
       (string? body) (send-string exchange response body)
       (instance? File body) (send-file exchange response body)
       (instance? InputStream body) (send-input-stream exchange response body)
-      (instance? byte-array-class body) (send-byte-array exchange response body)
+      (bytes? body) (send-byte-array exchange response body)
       (satisfies? protocols/StreamableResponseBody body) (send-streamable exchange response body)
       :else (send-error exchange))))
 
@@ -160,6 +174,7 @@
                             (send-exchange-response exchange)))))]
      (.createContext server index-path handler)
      server))
+
   ([host port handler ssl-context]
    (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
          handler (reify HttpHandler
