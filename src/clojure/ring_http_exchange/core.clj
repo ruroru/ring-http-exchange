@@ -59,7 +59,7 @@
       (logger/debugf "Unable to parse certificate due to: %s" (.getMessage ^Throwable t))
       (make-array X509Certificate 0))))
 
-(defn- get-https-exchange-request-map [host port ^HttpsExchange exchange]
+(defn- get-https-mtls-exchange-request-map [host port ^HttpsExchange exchange]
   (let [uri (.getRequestURI exchange)
         session ^SSLSession (.getSSLSession exchange)
         certificates (get-certificate session)]
@@ -76,6 +76,21 @@
       :remote-addr (.getHostString (.getRemoteAddress exchange))
       :server-name host
       :ssl-client-cert certificates)))
+
+
+(defn- get-https-exchange-request-map [host port ^HttpsExchange exchange]
+  (let [uri (.getRequestURI exchange)]
+    (array-map
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method (.getRequestMethod exchange))
+      :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
+      :uri (.getPath uri)
+      :query-string (.getQuery uri)
+      :server-port port
+      :scheme :https
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name host)))
 
 
 (defn- get-http-exchange-request-map [host port ^HttpExchange exchange]
@@ -163,29 +178,48 @@
       :else (send-error exchange))))
 
 
-(defn- get-server
-  ([host port handler]
-   (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)
-         handler (reify HttpHandler
-                   (handle [_ exchange]
-                     (with-open [exchange exchange]
-                       (->> (get-http-exchange-request-map host port exchange)
-                            (get-exchange-response handler)
-                            (send-exchange-response exchange)))))]
-     (.createContext server index-path handler)
-     server))
+(defmulti get-server (fn [_ _ _ ssl-context mtls? & _]
+                             (case [(nil? ssl-context) mtls?]
+                               [false true] :mtls
+                               [false false] :tls
+                               :no-tls)))
 
-  ([host port handler ssl-context]
-   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
-         handler (reify HttpHandler
-                   (handle [_ exchange]
-                     (with-open [exchange exchange]
-                       (->> (get-https-exchange-request-map host port exchange)
-                            (get-exchange-response handler)
-                            (send-exchange-response exchange)))))]
-     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-     (.createContext server index-path handler)
-     server)))
+(defmethod ^:private get-server :mtls [host port handler ssl-context & _]
+  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
+        handler (reify HttpHandler
+                  (handle [_ exchange]
+                    (with-open [exchange exchange]
+                      (->> (get-https-mtls-exchange-request-map host port exchange)
+                           (get-exchange-response handler)
+                           (send-exchange-response exchange)))))]
+    (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+    (.createContext server index-path handler)
+    server))
+
+
+(defmethod ^:private get-server :tls [host port handler ssl-context & _]
+  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
+        handler (reify HttpHandler
+                  (handle [_ exchange]
+                    (with-open [exchange exchange]
+                      (->> (get-https-exchange-request-map host port exchange)
+                           (get-exchange-response handler)
+                           (send-exchange-response exchange)))))]
+    (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+    (.createContext server index-path handler)
+    server))
+
+
+(defmethod ^:private get-server :no-tls [host port handler & _]
+  (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)
+        handler (reify HttpHandler
+                  (handle [_ exchange]
+                    (with-open [exchange exchange]
+                      (->> (get-http-exchange-request-map host port exchange)
+                           (get-exchange-response handler)
+                           (send-exchange-response exchange)))))]
+    (.createContext server index-path handler)
+    server))
 
 
 (defn stop-http-server
@@ -204,19 +238,20 @@
   :port                 - the port to listen on (defaults to 8080)
   :host                 - the hostname to listen on (defaults to 127.0.0.1)
   :ssl-context          - the ssl context, that is used in https server
-  :executor             - executor to use in HttpServer, will default to ThreadPoolExecutor"
+  :executor             - executor to use in HttpServer, will default to ThreadPoolExecutor
+  :mtls?                - a boolean value indicating whether to enable mutual TLS (mTLS), will default to false."
 
   [handler {:keys [host
                    port
                    ssl-context
-                   executor]
+                   executor
+                   mtls?]
             :or   {host        localhost
                    port        8080
                    ssl-context nil
-                   executor    (Executors/newCachedThreadPool)}}]
-  (let [^HttpServer server (if ssl-context
-                             (get-server host port handler ssl-context)
-                             (get-server host port handler))]
+                   executor    (Executors/newCachedThreadPool)
+                   mtls?       false}}]
+  (let [^HttpServer server (get-server host port handler ssl-context mtls?)]
     (try
       (doto server
         (.setExecutor executor)
