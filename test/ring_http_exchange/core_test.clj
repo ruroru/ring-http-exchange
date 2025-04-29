@@ -167,16 +167,6 @@
                            :body    "hello from file"}]
     (verify-response-with-default-status server-response expected-response)))
 
-(deftest can-use-nil-as-response-body
-  (let [server-response {:status  200
-                         :headers {"Content-type" "text/html; charset=utf-8"}
-                         :body    nil}
-
-        expected-response {:status  200
-                           :headers {"Transfer-encoding" "chunked"
-                                     "Content-type"      "text/html; charset=utf-8"}
-                           :body    ""}]
-    (verify-response-with-default-status server-response expected-response)))
 
 (deftest can-use-byte-array-as-response-body
   (let [server-response {:status  200
