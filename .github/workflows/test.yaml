@@ -1,0 +1,10 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  run-lein-tests:
+    name: Lein test
+    uses: ruroru/workflows/.github/workflows/lein-test.yaml@master
