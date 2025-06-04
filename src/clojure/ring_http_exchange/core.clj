@@ -56,7 +56,8 @@
         (cast X509Certificate certificate))
       (.getPeerCertificates session))
     (catch Exception t
-      (logger/debugf "Unable to parse certificate due to: %s" (.getMessage ^Throwable t))
+      (when (logger/enabled? :debug)
+        (logger/debugf "Unable to parse certificate due to: %s" (.getMessage ^Throwable t)))
       (make-array X509Certificate 0))))
 
 (defn- get-https-mtls-exchange-request-map [host port ^HttpsExchange exchange]

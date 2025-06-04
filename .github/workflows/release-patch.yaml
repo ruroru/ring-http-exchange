@@ -1,0 +1,14 @@
+name: Release patch version to clojars
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    uses: ruroru/workflows/.github/workflows/clojars-release-patch.yaml@master
+    secrets:
+      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+      CLOJARS_USER: ${{ secrets.CLOJARS_USER }}
+      CLOJARS_PASS: ${{ secrets.CLOJARS_PASS }}
