@@ -22,7 +22,7 @@
                     :source-paths   ["test/clojure"]
                     :dependencies   [[org.babashka/http-client "0.4.23"]
                                      [criterium "0.4.6"]
-                                     [babashka/fs "0.5.25"]
+                                     [babashka/fs "0.5.26"]
                                      [clj-http "3.13.0"]]}}
 
   :plugins [[org.clojars.jj/bump "1.0.4"]
