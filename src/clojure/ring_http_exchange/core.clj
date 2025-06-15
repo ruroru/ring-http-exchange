@@ -38,6 +38,15 @@
       (transient {})
       entry-set)))
 
+(defn- get-keywordized-request-headers [^Set entry-set]
+  (persistent!
+    (reduce
+      (fn [m ^Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry header]
+        (let [key (keyword (.toLowerCase ^String (.getKey header)))
+              value (get-header-value (.getValue header))]
+          (assoc! m key value)))
+      (transient {})
+      entry-set)))
 
 (defn- set-response-headers [^Headers response-headers resp-headers]
   (doseq [[k v] resp-headers]
@@ -60,7 +69,7 @@
         (logger/debugf "Unable to parse certificate due to: %s" (.getMessage ^Throwable t)))
       (make-array X509Certificate 0))))
 
-(defn- get-https-mtls-exchange-request-map [host port ^HttpsExchange exchange]
+(defn- https-request-map-with-ssl-client-cert [host port ^HttpsExchange exchange]
   (let [uri (.getRequestURI exchange)
         session ^SSLSession (.getSSLSession exchange)
         certificates (get-certificate session)]
@@ -78,8 +87,25 @@
       :server-name host
       :ssl-client-cert certificates)))
 
+(defn- https-request-map-with-ssl-client-cert-and-keywordized-request-headers [host port ^HttpsExchange exchange]
+  (let [uri (.getRequestURI exchange)
+        session ^SSLSession (.getSSLSession exchange)
+        certificates (get-certificate session)]
+    (array-map
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method (.getRequestMethod exchange))
+      :headers (get-keywordized-request-headers (.entrySet (.getRequestHeaders exchange)))
+      :uri (.getPath uri)
+      :query-string (.getQuery uri)
+      :server-port port
+      :scheme :https
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name host
+      :ssl-client-cert certificates)))
 
-(defn- get-https-exchange-request-map [host port ^HttpsExchange exchange]
+
+(defn- https-request-map [host port ^HttpsExchange exchange]
   (let [uri (.getRequestURI exchange)]
     (array-map
       :body (.getRequestBody exchange)
@@ -93,13 +119,41 @@
       :remote-addr (.getHostString (.getRemoteAddress exchange))
       :server-name host)))
 
+(defn- https-request-map-with-keywordized-request-headers [host port ^HttpsExchange exchange]
+  (let [uri (.getRequestURI exchange)]
+    (array-map
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method (.getRequestMethod exchange))
+      :headers (get-keywordized-request-headers (.entrySet (.getRequestHeaders exchange)))
+      :uri (.getPath uri)
+      :query-string (.getQuery uri)
+      :server-port port
+      :scheme :https
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name host)))
 
-(defn- get-http-exchange-request-map [host port ^HttpExchange exchange]
+
+(defn- http-request-map [host port ^HttpExchange exchange]
   (let [uri (.getRequestURI exchange)]
     (array-map
       :body (.getRequestBody exchange)
       :request-method (get-request-method (.getRequestMethod exchange))
       :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
+      :uri (.getPath uri)
+      :query-string (.getQuery uri)
+      :server-port port
+      :scheme :http
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name host)))
+
+(defn- http-request-map-with-keywordized-request-headers [host port ^HttpExchange exchange]
+  (let [uri (.getRequestURI exchange)]
+    (array-map
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method (.getRequestMethod exchange))
+      :headers (get-keywordized-request-headers (.entrySet (.getRequestHeaders exchange)))
       :uri (.getPath uri)
       :query-string (.getQuery uri)
       :server-port port
@@ -179,46 +233,71 @@
       :else (send-error exchange))))
 
 
-(defmulti get-server (fn [_ _ _ ssl-context mtls? & _]
-                             (case [(nil? ssl-context) mtls?]
-                               [false true] :mtls
-                               [false false] :tls
-                               :no-tls)))
+(defmulti get-server (fn [_ _ _ ssl-context _ keyword-headers]
+                       (case [(nil? ssl-context) keyword-headers]
+                         [false true] :tls-with-client-certs
+                         [false false] :tls
+                         :no-tls)))
 
-(defmethod ^:private get-server :mtls [host port handler ssl-context & _]
+(defmethod ^:private get-server :tls-with-client-certs [host port handler  ssl-context keyword-headers? & _]
   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
-        handler (reify HttpHandler
-                  (handle [_ exchange]
-                    (with-open [exchange exchange]
-                      (->> (get-https-mtls-exchange-request-map host port exchange)
-                           (get-exchange-response handler)
-                           (send-exchange-response exchange)))))]
+        handler (if keyword-headers?
+                  (reify HttpHandler
+                    (handle [_ exchange]
+                      (with-open [exchange exchange]
+                        (->> (https-request-map-with-ssl-client-cert-and-keywordized-request-headers host port exchange)
+                             (get-exchange-response handler)
+                             (send-exchange-response exchange)))))
+                  (reify HttpHandler
+                    (handle [_ exchange]
+                      (with-open [exchange exchange]
+                        (->> (https-request-map-with-ssl-client-cert host port exchange)
+                             (get-exchange-response handler)
+                             (send-exchange-response exchange))))))]
     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
     (.createContext server index-path handler)
     server))
 
 
-(defmethod ^:private get-server :tls [host port handler ssl-context & _]
+(defmethod ^:private get-server :tls [host port handler  ssl-context keyword-headers?  & _]
+
+  (when (logger/enabled? :debug)
+    (logger/debug "Starting server with ssl-context and keyword headers"))
   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
-        handler (reify HttpHandler
-                  (handle [_ exchange]
-                    (with-open [exchange exchange]
-                      (->> (get-https-exchange-request-map host port exchange)
-                           (get-exchange-response handler)
-                           (send-exchange-response exchange)))))]
+        handler (if keyword-headers?
+                  (reify HttpHandler
+                    (handle [_ exchange]
+                      (with-open [exchange exchange]
+                        (->> (https-request-map-with-keywordized-request-headers host port exchange)
+                             (get-exchange-response handler)
+                             (send-exchange-response exchange)))))
+                  (reify HttpHandler
+                    (handle [_ exchange]
+                      (with-open [exchange exchange]
+                        (->> (https-request-map host port exchange)
+                             (get-exchange-response handler)
+                             (send-exchange-response exchange))))))]
     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
     (.createContext server index-path handler)
     server))
 
 
-(defmethod ^:private get-server :no-tls [host port handler & _]
+(defmethod ^:private get-server :no-tls [host port handler _ keyword-headers?  & _]
   (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)
-        handler (reify HttpHandler
-                  (handle [_ exchange]
-                    (with-open [exchange exchange]
-                      (->> (get-http-exchange-request-map host port exchange)
-                           (get-exchange-response handler)
-                           (send-exchange-response exchange)))))]
+        handler (if keyword-headers?
+                  (do
+                    (reify HttpHandler
+                      (handle [_ exchange]
+                        (with-open [exchange exchange]
+                          (->> (http-request-map-with-keywordized-request-headers host port exchange)
+                               (get-exchange-response handler)
+                               (send-exchange-response exchange))))))
+                  (reify HttpHandler
+                    (handle [_ exchange]
+                      (with-open [exchange exchange]
+                        (->> (http-request-map host port exchange)
+                             (get-exchange-response handler)
+                             (send-exchange-response exchange))))))]
     (.createContext server index-path handler)
     server))
 
@@ -237,22 +316,26 @@
   handler according to the supplied options:
 
   :port                 - the port to listen on (defaults to 8080)
-  :host                 - the hostname to listen on (defaults to 127.0.0.1)
+  :host                 - the hostname to listen on (defaults to 0.0.0.0)
   :ssl-context          - the ssl context, that is used in https server
   :executor             - executor to use in HttpServer, will default to ThreadPoolExecutor
-  :mtls?                - a boolean value indicating whether to enable mutual TLS (mTLS), will default to false."
+  :client-certs?        - a boolean value indicating if :ssl-client-cert should be added, defaults to false
+  :keyword-headers?     - convert request header  keys to keywords, defaults to false.
+  "
 
   [handler {:keys [host
                    port
                    ssl-context
                    executor
-                   mtls?]
-            :or   {host        localhost
-                   port        8080
-                   ssl-context nil
-                   executor    (Executors/newCachedThreadPool)
-                   mtls?       false}}]
-  (let [^HttpServer server (get-server host port handler ssl-context mtls?)]
+                   client-certs?
+                   keyword-headers?]
+            :or   {host             localhost
+                   port             8080
+                   ssl-context      nil
+                   executor         (Executors/newCachedThreadPool)
+                   client-certs?    false
+                   keyword-headers? false}}]
+  (let [^HttpServer server (get-server host port handler ssl-context keyword-headers? client-certs?)]
     (try
       (doto server
         (.setExecutor executor)

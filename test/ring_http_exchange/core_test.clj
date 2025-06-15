@@ -358,3 +358,125 @@
                                      "Content-type"   "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
+
+
+(deftest test-request-map-with-keyword-headers-set-to-true
+  (let [server-config {:host             "localhost"
+                       :port             8083
+                       :keyword-headers? true}
+        expected-request-headers {:accept-encoding "gzip, deflate"
+                                  :connection      "close"
+                                  :content-length  "11"
+                                  :content-type    "text/plain; charset=UTF-8"
+                                  :host            "localhost:8083"
+                                  }]
+    (let [server (server/run-http-server (fn [req]
+
+                                           {:status  200
+                                            :headers {}
+                                            :body    (str (dissoc (:headers req) :user-agent))})
+                                         server-config)
+          response (client/put (format "http://localhost:%s/hello-world?q=query&s=string" (:port server-config)) {:body "hello world"})]
+      (is (= (:status response) 200))
+      (is (= expected-request-headers (edn/read-string (:body response))))
+      (server/stop-http-server server))))
+
+
+(deftest test-request-map-with-keyword-headers-set-to-true1
+
+  (let [server-config {:host                  "localhost"
+                       :port                  8083
+                       :ssl-context           (ssl/keystore->ssl-context
+                                                (io/resource "keystore.jks")
+                                                default-password
+                                                (io/resource "truststore.jks")
+                                                default-password
+                                                )
+                       :tls-with-client-certs false
+                       :keyword-headers?      true}
+        expected-request-headers {:accept-encoding "gzip, deflate"
+                                  :connection      "close"
+                                  :host            "localhost:8083"}]
+    (let [server (server/run-http-server (fn [req]
+                                           {:status  200
+                                            :headers {}
+                                            :body    (str (dissoc (:headers req) :user-agent))})
+                                         server-config)
+          response (client/get (format "https://localhost:%s/" (:port server-config)) {:insecure?        true
+                                                                                       :throw-exceptions false})]
+      (is (= (:status response) 200))
+      (is (= expected-request-headers (edn/read-string (:body response))))
+      (server/stop-http-server server))))
+
+(deftest test-request-map-with-keyword-headers-set-to-true-and-tls-with-client-certs-is-true
+  (let [server-config {:host                  "localhost"
+                       :port                  8083
+                       :tls-with-client-certs true
+                       :ssl-context           (ssl/keystore->ssl-context
+                                                (io/resource "keystore.jks")
+                                                default-password
+                                                (io/resource "truststore.jks")
+                                                default-password
+                                                )
+                       :keyword-headers?      true}
+        expected-request-headers {:accept-encoding "gzip, deflate"
+                                  :connection      "close"
+                                  :host            "localhost:8083"}]
+    (let [server (server/run-http-server (fn [req]
+
+                                           {:status  200
+                                            :headers {}
+                                            :body    (str (dissoc (:headers req) :user-agent))})
+                                         server-config)
+          response (client/get (format "https://localhost:%s/" (:port server-config)) {:insecure?        true
+                                                                                       :throw-exceptions false})]
+      (is (= (:status response) 200))
+      (is (= expected-request-headers (edn/read-string (:body response))))
+      (server/stop-http-server server))))
+
+
+(deftest  ssl-client-certcerts-is-added-to-request-when-tls-with-client-certs-is-true
+  (let [server-config {:host                  "localhost"
+                       :port                  8083
+                       :tls-with-client-certs true
+                       :ssl-context           (ssl/keystore->ssl-context
+                                                (io/resource "keystore.jks")
+                                                default-password
+                                                (io/resource "truststore.jks")
+                                                default-password
+                                                )
+                       :keyword-headers?      true}
+        ]
+    (let [server (server/run-http-server (fn [req]
+                                           {:status  200
+                                            :headers {}
+                                            :body    (str (contains? req :ssl-client-cert))})
+                                         server-config)
+          response (client/get (format "https://localhost:%s/" (:port server-config)) {:insecure?        true
+                                                                                       :throw-exceptions false})]
+      (is (= (:status response) 200))
+      (is (= (edn/read-string (:body response)) ))
+      (server/stop-http-server server))))
+
+(deftest  ssl-client-certcerts-is-added-to-request-when-tls-with-client-certs-is-false
+  (let [server-config {:host                  "localhost"
+                       :port                  8083
+                       :tls-with-client-certs false
+                       :ssl-context           (ssl/keystore->ssl-context
+                                                (io/resource "keystore.jks")
+                                                default-password
+                                                (io/resource "truststore.jks")
+                                                default-password
+                                                )
+                       :keyword-headers?      true}
+        ]
+    (let [server (server/run-http-server (fn [req]
+                                           {:status  200
+                                            :headers {}
+                                            :body    (str (contains? req :ssl-client-cert))})
+                                         server-config)
+          response (client/get (format "https://localhost:%s/" (:port server-config)) {:insecure?        true
+                                                                                       :throw-exceptions false})]
+      (is (= (:status response) 200))
+      (is (not (edn/read-string (:body response))))
+      (server/stop-http-server server))))
