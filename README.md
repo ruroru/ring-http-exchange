@@ -53,6 +53,9 @@ web app, while avoiding adding any new major dependencies on the classpath.
 ### Limitations
 
 * `Transfer-Encoding` header will be set to `chunked`, if it is not possible to get length of the body.
+## Other
+### Rabaho httpserver
+Optionally can add ``[io.github.robaho/httpserver "1.0.27"]`` to dependency list, which is a drop in replacement for com.sun.net.httpserver.
 
 ## License
 
