@@ -179,14 +179,14 @@
       :else (send-error exchange))))
 
 
-(defmulti get-server (fn [_ _ _ ssl-context mtls? & _]
-                             (case [(nil? ssl-context) mtls?]
-                               [false true] :mtls
-                               [false false] :tls
-                               :no-tls)))
+(defmulti get-server (fn [_ _ _ _ ssl-context get-ssl-client-cert?]
+                       (case [(nil? ssl-context) get-ssl-client-cert?]
+                         [false true] :with-client-cert
+                         [false false] :without-client-cert
+                         :no-tls)))
 
-(defmethod ^:private get-server :mtls [host port handler ssl-context & _]
-  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
+(defmethod ^:private get-server :with-client-cert [host port backlog _ handler ssl-context & _]
+  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
         handler (reify HttpHandler
                   (handle [_ exchange]
                     (with-open [exchange exchange]
@@ -198,8 +198,8 @@
     server))
 
 
-(defmethod ^:private get-server :tls [host port handler ssl-context & _]
-  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) 0)
+(defmethod ^:private get-server :without-client-cert [host port backlog handler ssl-context & _]
+  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
         handler (reify HttpHandler
                   (handle [_ exchange]
                     (with-open [exchange exchange]
@@ -211,8 +211,8 @@
     server))
 
 
-(defmethod ^:private get-server :no-tls [host port handler & _]
-  (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) 0)
+(defmethod ^:private get-server :no-tls [host port backlog handler & _]
+  (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
         handler (reify HttpHandler
                   (handle [_ exchange]
                     (with-open [exchange exchange]
@@ -240,19 +240,22 @@
   :host                 - the hostname to listen on (defaults to 127.0.0.1)
   :ssl-context          - the ssl context, that is used in https server
   :executor             - executor to use in HttpServer, will default to ThreadPoolExecutor
-  :mtls?                - a boolean value indicating whether to enable mutual TLS (mTLS), will default to false."
+  :get-ssl-client-cert? - a boolean value indicating whether to enable mutual TLS (mTLS), will default to false.
+  :backlog              - size of a backlog, defaults to 8192"
 
   [handler {:keys [host
                    port
                    ssl-context
                    executor
-                   mtls?]
-            :or   {host        localhost
-                   port        8080
-                   ssl-context nil
-                   executor    (Executors/newCachedThreadPool)
-                   mtls?       false}}]
-  (let [^HttpServer server (get-server host port handler ssl-context mtls?)]
+                   get-ssl-client-cert?
+                   backlog]
+            :or   {host                 localhost
+                   port                 8080
+                   ssl-context          nil
+                   executor             (Executors/newCachedThreadPool)
+                   get-ssl-client-cert? false
+                   backlog              (* 1024 8)}}]
+  (let [^HttpServer server (get-server host port backlog handler ssl-context get-ssl-client-cert?)]
     (try
       (doto server
         (.setExecutor executor)
