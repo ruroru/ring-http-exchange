@@ -14,7 +14,7 @@
 (def ^:const ^:private content-type "Content-type")
 (def ^:const ^:private index-path "/")
 (def ^:const ^:private internal-server-error "Internal Server Error")
-(def ^:const ^:private localhost "127.0.0.1")
+(def ^:const ^:private default-host "0.0.0.0")
 (def ^:const ^:private text-html "text/html")
 (def ^:const ^:private method-cache (into {}
                                           (for [method ["get" "post" "put" "patch" "delete" "head" "options" "trace"]]
@@ -249,7 +249,7 @@
                    executor
                    get-ssl-client-cert?
                    backlog]
-            :or   {host                 localhost
+            :or   {host                 default-host
                    port                 8080
                    ssl-context          nil
                    executor             (Executors/newCachedThreadPool)

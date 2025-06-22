@@ -1,8 +1,7 @@
 # ring-http-exchange
 
 Clojure [ring](https://github.com/ring-clojure/ring) adapter for
-[
-`com.sun.net.httpserver.HttpServer`](https://docs.oracle.com/javase/8/docs/jre/api/net/httpserver/spec/com/sun/net/httpserver/HttpServer.html)
+[`com.sun.net.httpserver.HttpServer`](https://docs.oracle.com/javase/8/docs/jre/api/net/httpserver/spec/com/sun/net/httpserver/HttpServer.html)
 which is included in the JDK.
 
 The main motivation for this is to support starting a small HTTP

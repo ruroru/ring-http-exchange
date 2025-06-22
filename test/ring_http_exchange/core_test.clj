@@ -312,7 +312,7 @@
                               :query-string    nil
                               :request-method  :get
                               :scheme          :https
-                              :server-name     "127.0.0.1"
+                              :server-name     "0.0.0.0"
                               :server-port     9443
                               :ssl-client-cert :empty-cert
                               :uri             "/"}]
