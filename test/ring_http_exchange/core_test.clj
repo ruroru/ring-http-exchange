@@ -358,3 +358,12 @@
                                      "Content-type"   "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
+
+
+(deftest respose-nil-returns-500-internal-server-error
+  (let [server-response nil
+        expected-response {:status  500
+                           :headers {"Content-length" "21"
+                                     "Content-type"   "text/html"}
+                           :body    "Internal Server Error"}]
+    (verify-response server-response expected-response)))
