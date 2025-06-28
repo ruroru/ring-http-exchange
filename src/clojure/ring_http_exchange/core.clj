@@ -185,41 +185,45 @@
                          [false false] :without-client-cert
                          :no-tls)))
 
+(deftype HandlerWithClientCert [host port handler]
+  HttpHandler
+  (handle [_ exchange]
+    (with-open [exchange exchange]
+      (->> (get-https-mtls-exchange-request-map host port exchange)
+           (get-exchange-response handler)
+           (send-exchange-response exchange)))))
+
 (defmethod ^:private get-server :with-client-cert [host port backlog _ handler ssl-context & _]
-  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
-        handler (reify HttpHandler
-                  (handle [_ exchange]
-                    (with-open [exchange exchange]
-                      (->> (get-https-mtls-exchange-request-map host port exchange)
-                           (get-exchange-response handler)
-                           (send-exchange-response exchange)))))]
+  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-    (.createContext server index-path handler)
+    (.createContext server index-path (HandlerWithClientCert. host port handler))
     server))
 
+(deftype HandlerWithoutClientCert [host port handler]
+  HttpHandler
+  (handle [_ exchange]
+    (with-open [exchange exchange]
+      (->> (get-https-mtls-exchange-request-map host port exchange)
+           (get-exchange-response handler)
+           (send-exchange-response exchange)))))
 
 (defmethod ^:private get-server :without-client-cert [host port backlog handler ssl-context & _]
-  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
-        handler (reify HttpHandler
-                  (handle [_ exchange]
-                    (with-open [exchange exchange]
-                      (->> (get-https-exchange-request-map host port exchange)
-                           (get-exchange-response handler)
-                           (send-exchange-response exchange)))))]
+  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-    (.createContext server index-path handler)
+    (.createContext server index-path (HandlerWithoutClientCert. host port handler))
     server))
 
+(deftype UnsecureHandler [host port handler]
+  HttpHandler
+  (handle [_ exchange]
+    (with-open [exchange exchange]
+      (->> (get-http-exchange-request-map host port exchange)
+           (get-exchange-response handler)
+           (send-exchange-response exchange)))))
 
 (defmethod ^:private get-server :no-tls [host port backlog handler & _]
-  (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
-        handler (reify HttpHandler
-                  (handle [_ exchange]
-                    (with-open [exchange exchange]
-                      (->> (get-http-exchange-request-map host port exchange)
-                           (get-exchange-response handler)
-                           (send-exchange-response exchange)))))]
-    (.createContext server index-path handler)
+  (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
+    (.createContext server index-path (UnsecureHandler. host port handler))
     server))
 
 
