@@ -168,6 +168,17 @@
     (verify-response-with-default-status server-response expected-response)))
 
 
+(deftest non-existing-body-returns-500-internal-server-error
+  (let [server-response {:status  200
+                         :headers {"Content-type" "text/html; charset=utf-8"}
+                         :body    (File. (str (bfs/cwd) "/test/resources/not-existing"))}
+
+        expected-response {:status  500
+                           :headers {"Content-length" "21"
+                                     "Content-type"   "text/html"}
+                           :body    "Internal Server Error"}]
+    (verify-response-with-default-status server-response expected-response)))
+
 (deftest can-use-byte-array-as-response-body
   (let [server-response {:status  200
                          :headers {"Content-type" "text/html; charset=utf-8"}
@@ -238,14 +249,14 @@
 
 (deftest test-request-map-get-request
   (let [server-config {:host "127.0.0.1"
-                       :port 8083}
+                       :port 8085}
         expected-request-map {
                               :protocol       "HTTP/1.1",
                               :remote-addr    "127.0.0.1",
                               :headers        {"Accept-encoding" "gzip, deflate",
                                                "Connection"      "close",
-                                               "Host"            "localhost:8083"},
-                              :server-port    8083, :uri "/",
+                                               "Host"            "localhost:8085"},
+                              :server-port    8085, :uri "/",
                               :server-name    "127.0.0.1",
                               :query-string   nil,
                               :scheme         :http,
@@ -254,17 +265,17 @@
 
 (deftest test-request-map-head-request
   (let [server-config {:host "localhost"
-                       :port 8083}
+                       :port 8084}
         expected-request-map {:headers        {"Accept-encoding" "gzip, deflate"
                                                "Connection"      "close"
-                                               "Host"            "localhost:8083"}
+                                               "Host"            "localhost:8084"}
                               :protocol       "HTTP/1.1"
                               :query-string   nil
                               :remote-addr    "127.0.0.1"
                               :request-method :get
                               :scheme         :http
                               :server-name    "localhost"
-                              :server-port    8083
+                              :server-port    8084
                               :uri            "/"}]
     (verify-request-map server-config expected-request-map)))
 
@@ -358,3 +369,21 @@
                                      "Content-type"   "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
+
+
+(deftest respose-nil-returns-500-internal-server-error
+  (let [server-response nil
+        expected-response {:status  500
+                           :headers {"Content-length" "21"
+                                     "Content-type"   "text/html"}
+                           :body    "Internal Server Error"}]
+    (verify-response server-response expected-response)))
+
+
+(deftest respose-empty-map-returns-200-empty-response
+  (let [server-response {}
+        expected-response {:status  200
+                           :headers {"Transfer-encoding" "chunked"}
+                           :body    ""}]
+    (verify-response server-response expected-response)))
+
