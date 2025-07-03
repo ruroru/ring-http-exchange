@@ -5,7 +5,7 @@
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as string]
-    [clojure.test :refer [deftest is testing]]
+    [clojure.test :refer [deftest is are testing]]
     [clojure.tools.logging :as logger]
     [ring-http-exchange.core :as server]
     [ring-http-exchange.ssl :as ssl]
@@ -387,3 +387,9 @@
                            :body    ""}]
     (verify-response server-response expected-response)))
 
+(deftest test-invalid-ports-return-nil
+  (are [invalid-port ] (nil? (server/run-http-server (fn [_] {}) {:port invalid-port}))
+                       -1
+                       0
+                       65537
+                       ))

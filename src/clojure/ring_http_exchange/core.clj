@@ -1,5 +1,6 @@
 (ns ring-http-exchange.core
-  (:require [clojure.string :as str]
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.tools.logging :as logger]
             [ring.core.protocols :as protocols])
   (:import (com.sun.net.httpserver Headers HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsExchange HttpsServer)
@@ -9,6 +10,8 @@
            (java.util Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry List Set)
            (java.util.concurrent Executors)
            (javax.net.ssl SSLSession)))
+
+(s/def ::port (s/int-in 1 65536))
 
 (def ^:const ^:private comma ",")
 (def ^:const ^:private content-type "Content-type")
@@ -122,12 +125,9 @@
   (set-response-headers (.getResponseHeaders exchange) (response :headers))
   (let [content-length (.length body)]
     (.sendResponseHeaders exchange (response :status 200) content-length))
-  (let [in ^InputStream (FileInputStream. body)
-        out ^OutputStream (.getResponseBody exchange)]
-    (.transferTo ^FileInputStream in out)
-    (.close in)
-    (.flush out)
-    (.close out)))
+  (with-open [in ^InputStream (FileInputStream. body)
+              out ^OutputStream (.getResponseBody exchange)]
+    (.transferTo ^FileInputStream in out)))
 
 
 (defn- send-input-stream [^HttpExchange exchange response ^InputStream in]
@@ -265,11 +265,12 @@
                    executor             (Executors/newCachedThreadPool)
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)}}]
-  (let [^HttpServer server (get-server host port backlog handler ssl-context get-ssl-client-cert?)]
-    (try
-      (doto server
-        (.setExecutor executor)
-        (.start))
-      (catch Throwable t
-        (logger/error (.getMessage t))
-        (throw t)))))
+  (when (s/valid? ::port port)
+    (let [^HttpServer server (get-server host port backlog handler ssl-context get-ssl-client-cert?)]
+      (try
+        (doto server
+          (.setExecutor executor)
+          (.start))
+        (catch Throwable t
+          (logger/error (.getMessage t))
+          (throw t))))))
