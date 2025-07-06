@@ -10,6 +10,19 @@ web app, while avoiding adding any new major dependencies on the classpath.
 
 [![Clojars Project](https://img.shields.io/clojars/v/org.clojars.jj/ring-http-exchange.svg)](https://clojars.org/org.clojars.jj/ring-http-exchange)
 
+## Installation
+Add ring-http-exchange to dependency list
+```clojure
+[org.clojars.jj/ring-http-exchange "1.2.1"]
+```
+
+
+### robaho httpserver
+For better performance, [robaho httpserver](https://github.com/robaho/httpserver) can be added to the dependency list. It is a drop-in replacement for a ``com.sun.net.httpserver``
+```clojure
+[io.github.robaho/httpserver "1.0.27"]
+```
+
 ## Usage
 
 ``` clojure
@@ -38,16 +51,15 @@ web app, while avoiding adding any new major dependencies on the classpath.
 | `java.io.File`                               |
 | `byte[]`                                     |
 | `ring.core.protocols/StreamableResponseBody` |
-| `nil`                                        |
 
 ### Server configuration
 
-| Property      | Description                                  | Default value       |
-|---------------|----------------------------------------------|---------------------|
-| `host`        | Host name                                    | 127.0.0.1           | 
-| `port`        | Application port                             | 8080                |
-| `executor`    | Executor to be used                          | CachedThreadPool    |
-| `ssl-context` | Ssl context to be used in https configurator | nil                 |
+| Property      | Description                                  | Default value    |
+|---------------|----------------------------------------------|------------------|
+| `host`        | Host name                                    | 0.0.0.0          | 
+| `port`        | Application port                             | 8080             |
+| `executor`    | Executor to be used                          | CachedThreadPool |
+| `ssl-context` | Ssl context to be used in https configurator | nil              |
 
 ### Limitations
 
@@ -55,5 +67,4 @@ web app, while avoiding adding any new major dependencies on the classpath.
 
 ## License
 
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Distributed under the Eclipse Public License either version 1.0 or (at your option) any later version.
