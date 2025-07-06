@@ -38,16 +38,15 @@ web app, while avoiding adding any new major dependencies on the classpath.
 | `java.io.File`                               |
 | `byte[]`                                     |
 | `ring.core.protocols/StreamableResponseBody` |
-| `nil`                                        |
 
 ### Server configuration
 
-| Property      | Description                                  | Default value       |
-|---------------|----------------------------------------------|---------------------|
-| `host`        | Host name                                    | 127.0.0.1           | 
-| `port`        | Application port                             | 8080                |
-| `executor`    | Executor to be used                          | CachedThreadPool    |
-| `ssl-context` | Ssl context to be used in https configurator | nil                 |
+| Property      | Description                                  | Default value    |
+|---------------|----------------------------------------------|------------------|
+| `host`        | Host name                                    | 0.0.0.0          | 
+| `port`        | Application port                             | 8080             |
+| `executor`    | Executor to be used                          | CachedThreadPool |
+| `ssl-context` | Ssl context to be used in https configurator | nil              |
 
 ### Limitations
 
@@ -55,5 +54,4 @@ web app, while avoiding adding any new major dependencies on the classpath.
 
 ## License
 
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Distributed under the Eclipse Public License either version 1.0 or (at your option) any later version.
