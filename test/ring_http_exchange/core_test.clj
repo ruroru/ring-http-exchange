@@ -17,6 +17,7 @@
            (sun.net.httpserver FixedLengthInputStream)))
 
 (def default-password "password")
+(defrecord Response [body headers status])
 
 (extend-protocol protocols/StreamableResponseBody
   Keyword
@@ -47,7 +48,7 @@
                                         8080))
                               {:insecure?        true
                                :throw-exceptions false})]
-     (logger/info response)
+
      (is (= (:status expected-responses) (:status response)))
      (is (= (:headers expected-responses)
             (dissoc (:headers response) "Date")))
@@ -388,8 +389,16 @@
     (verify-response server-response expected-response)))
 
 (deftest test-invalid-ports-return-nil
-  (are [invalid-port ] (nil? (server/run-http-server (fn [_] {}) {:port invalid-port}))
-                       -1
-                       0
-                       65537
-                       ))
+  (are [invalid-port] (nil? (server/run-http-server (fn [_] {}) {:port invalid-port}))
+                      -1
+                      0
+                      65537))
+
+(deftest can-use-record-as-response
+  (let [server-response (Response. "hello world" {"Content-type" "text/html; charset=utf-8"} 200)
+
+        expected-response {:status  200
+                           :headers {"Content-length" "11"
+                                     "Content-type"   "text/html; charset=utf-8"}
+                           :body    "hello world"}]
+    (verify-response server-response expected-response)))
