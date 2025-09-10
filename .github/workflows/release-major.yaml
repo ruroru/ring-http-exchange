@@ -8,8 +8,7 @@ jobs:
     permissions:
       contents: write
     uses: ruroru/workflows/.github/workflows/clojars-release-major.yaml@master
-    with:
-      bump_readme: false
+
     secrets:
       GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
       CLOJARS_USER: ${{ secrets.CLOJARS_USER }}
