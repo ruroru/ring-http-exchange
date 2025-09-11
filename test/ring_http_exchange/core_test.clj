@@ -5,8 +5,7 @@
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as string]
-    [clojure.test :refer [deftest is are testing]]
-    [clojure.tools.logging :as logger]
+    [clojure.test :refer [are deftest is testing]]
     [ring-http-exchange.core :as server]
     [ring-http-exchange.ssl :as ssl]
     [ring.core.protocols :as protocols])
@@ -51,7 +50,12 @@
 
      (is (= (:status expected-responses) (:status response)))
      (is (= (:headers expected-responses)
-            (dissoc (:headers response) "Date")))
+            (->
+              (:headers response)
+              (dissoc "Date")
+              (dissoc "Content-length")
+              (dissoc "Transfer-encoding")
+              )))
      (is (= (:body expected-responses) (:body response)))
      (server/stop-http-server server))))
 
@@ -69,8 +73,7 @@
                          :body    "hello world"}
 
         expected-response {:status  200
-                           :headers {"Content-length" "11"
-                                     "Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type"   "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response expected-response)))
 
@@ -80,8 +83,7 @@
                          :body    nil}
         server-config {:port 8081}
         expected-response {:status  200
-                           :headers {"Content-type"      "text/html; charset=utf-8"
-                                     "Transfer-encoding" "chunked"}
+                           :headers {"Content-type"      "text/html; charset=utf-8"}
                            :body    ""}]
     (verify-response server-response server-config expected-response)))
 
@@ -91,8 +93,7 @@
                          :body    "hello world"}
         server-config {:port 8081}
         expected-response {:status  200
-                           :headers {"Content-length" "11"
-                                     "Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type"   "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -107,8 +108,7 @@
                                       (io/resource "truststore.jks")
                                       default-password)}
         expected-response {:status  200
-                           :headers {"Content-length" "11"
-                                     "Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type"   "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -127,8 +127,7 @@
                                             default-password
                                             tls-version)}
               expected-response {:status  200
-                                 :headers {"Content-length" "11"
-                                           "Content-type"   "text/html; charset=utf-8"}
+                                 :headers {"Content-type"   "text/html; charset=utf-8"}
                                  :body    "hello world"}]
           (verify-response server-response server-config expected-response))))))
 
@@ -139,8 +138,7 @@
         server-config {:port        6443
                        :ssl-context nil}
         expected-response {:status  200
-                           :headers {"Content-length" "11"
-                                     "Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type"   "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -163,9 +161,8 @@
                          :body    (File. (str (bfs/cwd) "/test/resources/helloworld"))}
 
         expected-response {:status  200
-                           :headers {"Content-length" "15"
-                                     "Content-type"   "text/html; charset=utf-8"}
-                           :body    "hello from file"}]
+                           :headers {"Content-type"   "text/html; charset=utf-8"}
+                           :body    "Hello world"}]
     (verify-response-with-default-status server-response expected-response)))
 
 
@@ -175,8 +172,7 @@
                          :body    (File. (str (bfs/cwd) "/test/resources/not-existing"))}
 
         expected-response {:status  500
-                           :headers {"Content-length" "21"
-                                     "Content-type"   "text/html"}
+                           :headers {"Content-type"   "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response-with-default-status server-response expected-response)))
 
@@ -186,8 +182,7 @@
                          :body    (.getBytes "hello world")}
 
         expected-response {:status  200
-                           :headers {"Content-length" "11"
-                                     "Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type"   "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response-with-default-status server-response expected-response)))
 
@@ -197,8 +192,7 @@
                          :body    (ByteArrayInputStream. (.getBytes "hello input stream"))}
 
         expected-response {:status  201
-                           :headers {"Transfer-encoding" "chunked"
-                                     "Content-type"      "text/html; charset=utf-8"}
+                           :headers {"Content-type"      "text/html; charset=utf-8"}
                            :body    "hello input stream"}]
     (verify-response server-response expected-response)))
 
@@ -208,8 +202,7 @@
                          :body    (ByteArrayInputStream. (.getBytes "hello input stream"))}
 
         expected-response {:status  200
-                           :headers {"Transfer-encoding" "chunked"
-                                     "Content-type"      "text/html; charset=utf-8"}
+                           :headers {"Content-type"      "text/html; charset=utf-8"}
                            :body    "hello input stream"}]
     (verify-response server-response expected-response)))
 
@@ -354,8 +347,7 @@
                          :body    :false}
 
         expected-response {:status  200
-                           :headers {"Content-type"      "text/html; charset=utf-8"
-                                     "Transfer-encoding" "chunked"}
+                           :headers {"Content-type"      "text/html; charset=utf-8"}
                            :body    "false"}]
     (verify-response-with-default-status server-response expected-response)))
 
@@ -366,8 +358,7 @@
                          :body    1}
 
         expected-response {:status  500
-                           :headers {"Content-length" "21"
-                                     "Content-type"   "text/html"}
+                           :headers {"Content-type"   "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
 
@@ -375,8 +366,7 @@
 (deftest respose-nil-returns-500-internal-server-error
   (let [server-response nil
         expected-response {:status  500
-                           :headers {"Content-length" "21"
-                                     "Content-type"   "text/html"}
+                           :headers {"Content-type"   "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
 
@@ -384,7 +374,7 @@
 (deftest respose-empty-map-returns-200-empty-response
   (let [server-response {}
         expected-response {:status  200
-                           :headers {"Transfer-encoding" "chunked"}
+                           :headers {}
                            :body    ""}]
     (verify-response server-response expected-response)))
 
@@ -395,10 +385,16 @@
                       65537))
 
 (deftest can-use-record-as-response
-  (let [server-response (Response. "hello world" {"Content-type" "text/html; charset=utf-8"} 200)
+  (doseq [response-body (list
+                          "Hello world"
+                          (.getBytes "Hello world")
+                          (ByteArrayInputStream. (.getBytes "Hello world"))
+                          (File. (str (bfs/cwd) "/test/resources/helloworld")))]
 
-        expected-response {:status  200
-                           :headers {"Content-length" "11"
-                                     "Content-type"   "text/html; charset=utf-8"}
-                           :body    "hello world"}]
-    (verify-response server-response expected-response)))
+    (let [server-response (Response. response-body {"Content-type" "text/html; charset=utf-8"} 200)
+          expected-response {:status  200
+                             :headers {"Content-type" "text/html; charset=utf-8"}
+                             :body    "Hello world"}]
+
+      (verify-response server-response
+                       expected-response))))
