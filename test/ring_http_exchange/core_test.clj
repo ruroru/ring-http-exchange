@@ -9,8 +9,7 @@
     [ring-http-exchange.core :as server]
     [ring-http-exchange.ssl :as ssl]
     [ring.core.protocols :as protocols])
-  (:import (clojure.lang Keyword)
-           (java.io ByteArrayInputStream File OutputStream)
+  (:import (java.io ByteArrayInputStream File OutputStream)
            (java.util Base64)
            (java.util.concurrent Executors)
            (sun.net.httpserver FixedLengthInputStream)))
@@ -18,10 +17,12 @@
 (def default-password "password")
 (defrecord Response [body headers status])
 
+(deftype CustomStreamableType [])
+
 (extend-protocol protocols/StreamableResponseBody
-  Keyword
-  (write-body-to-stream [body _ ^OutputStream output-stream]
-    (.write output-stream ^bytes (.getBytes (name body)))
+  CustomStreamableType
+  (write-body-to-stream [_ _ ^OutputStream output-stream]
+    (.write output-stream ^bytes (.getBytes "Hello world"))
     (.close output-stream)))
 
 (defn- serialize-x509-certificate-array
@@ -54,8 +55,7 @@
               (:headers response)
               (dissoc "Date")
               (dissoc "Content-length")
-              (dissoc "Transfer-encoding")
-              )))
+              (dissoc "Transfer-encoding"))))
      (is (= (:body expected-responses) (:body response)))
      (server/stop-http-server server))))
 
@@ -67,23 +67,13 @@
     (testing (str "Testing: " server-response-without-status)
       (verify-response server-response-without-status expected-response))))
 
-(deftest port-defaults-to-8080
-  (let [server-response {:status  200
-                         :headers {"Content-type" "text/html; charset=utf-8"}
-                         :body    "hello world"}
-
-        expected-response {:status  200
-                           :headers {"Content-type"   "text/html; charset=utf-8"}
-                           :body    "hello world"}]
-    (verify-response server-response expected-response)))
-
 (deftest can-use-nil-in-body
   (let [server-response {:status  200
                          :headers {"Content-type" "text/html; charset=utf-8"}
                          :body    nil}
         server-config {:port 8081}
         expected-response {:status  200
-                           :headers {"Content-type"      "text/html; charset=utf-8"}
+                           :headers {"Content-type" "text/html; charset=utf-8"}
                            :body    ""}]
     (verify-response server-response server-config expected-response)))
 
@@ -93,7 +83,7 @@
                          :body    "hello world"}
         server-config {:port 8081}
         expected-response {:status  200
-                           :headers {"Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type" "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -108,7 +98,7 @@
                                       (io/resource "truststore.jks")
                                       default-password)}
         expected-response {:status  200
-                           :headers {"Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type" "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -127,7 +117,7 @@
                                             default-password
                                             tls-version)}
               expected-response {:status  200
-                                 :headers {"Content-type"   "text/html; charset=utf-8"}
+                                 :headers {"Content-type" "text/html; charset=utf-8"}
                                  :body    "hello world"}]
           (verify-response server-response server-config expected-response))))))
 
@@ -138,7 +128,7 @@
         server-config {:port        6443
                        :ssl-context nil}
         expected-response {:status  200
-                           :headers {"Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type" "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -155,16 +145,6 @@
     (is (= true (string/starts-with? (:body response) "VirtualThread")))
     (server/stop-http-server server)))
 
-(deftest can-use-file-as-response-body
-  (let [server-response {:status  200
-                         :headers {"Content-type" "text/html; charset=utf-8"}
-                         :body    (File. (str (bfs/cwd) "/test/resources/helloworld"))}
-
-        expected-response {:status  200
-                           :headers {"Content-type"   "text/html; charset=utf-8"}
-                           :body    "Hello world"}]
-    (verify-response-with-default-status server-response expected-response)))
-
 
 (deftest non-existing-body-returns-500-internal-server-error
   (let [server-response {:status  200
@@ -172,7 +152,7 @@
                          :body    (File. (str (bfs/cwd) "/test/resources/not-existing"))}
 
         expected-response {:status  500
-                           :headers {"Content-type"   "text/html"}
+                           :headers {"Content-type" "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response-with-default-status server-response expected-response)))
 
@@ -182,29 +162,9 @@
                          :body    (.getBytes "hello world")}
 
         expected-response {:status  200
-                           :headers {"Content-type"   "text/html; charset=utf-8"}
+                           :headers {"Content-type" "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response-with-default-status server-response expected-response)))
-
-(deftest can-use-input-stream-as-response-body
-  (let [server-response {:status  201
-                         :headers {"Content-type" "text/html; charset=utf-8"}
-                         :body    (ByteArrayInputStream. (.getBytes "hello input stream"))}
-
-        expected-response {:status  201
-                           :headers {"Content-type"      "text/html; charset=utf-8"}
-                           :body    "hello input stream"}]
-    (verify-response server-response expected-response)))
-
-
-(deftest can-use-input-stream-as-response-body-without-response-status
-  (let [server-response {:headers {"Content-type" "text/html; charset=utf-8"}
-                         :body    (ByteArrayInputStream. (.getBytes "hello input stream"))}
-
-        expected-response {:status  200
-                           :headers {"Content-type"      "text/html; charset=utf-8"}
-                           :body    "hello input stream"}]
-    (verify-response server-response expected-response)))
 
 
 (deftest can-survive-exceptions-in-handler
@@ -225,7 +185,6 @@
     (is (= 200 (:status response2)))
     (is (= "hello world" (:body response2)))
     (server/stop-http-server server)))
-
 
 (defn verify-request-map [server-config expected-request-map]
   (let [
@@ -303,9 +262,6 @@
       (is (= expected-request-map (edn/read-string (:body response))))
       (server/stop-http-server server))))
 
-
-
-
 (deftest test-https-request-headers-with-invalid-certificates
   (let [server-config {:port        9443
                        :ssl-context (ssl/keystore->ssl-context (io/resource "keystore.jks") default-password (io/resource "truststore.jks") default-password)}
@@ -340,25 +296,13 @@
                                     )))
       (server/stop-http-server server))))
 
-
-(deftest allow-setting-StreamableResponseBody
-  (let [server-response {:status  200
-                         :headers {"Content-type" "text/html; charset=utf-8"}
-                         :body    :false}
-
-        expected-response {:status  200
-                           :headers {"Content-type"      "text/html; charset=utf-8"}
-                           :body    "false"}]
-    (verify-response-with-default-status server-response expected-response)))
-
-
 (deftest not-supported-body-returns-500-internal-server-error
   (let [server-response {:status  200
                          :headers {"Content-type" "text/htm1l"}
                          :body    1}
 
         expected-response {:status  500
-                           :headers {"Content-type"   "text/html"}
+                           :headers {"Content-type" "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
 
@@ -366,7 +310,7 @@
 (deftest respose-nil-returns-500-internal-server-error
   (let [server-response nil
         expected-response {:status  500
-                           :headers {"Content-type"   "text/html"}
+                           :headers {"Content-type" "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
 
@@ -384,8 +328,45 @@
                       0
                       65537))
 
+(deftest can-use-map-as-response
+  (let [response-bodies (list
+                          (CustomStreamableType.)
+                          "Hello world"
+                          (.getBytes "Hello world")
+                          (ByteArrayInputStream. (.getBytes "Hello world"))
+                          (File. (str (bfs/cwd) "/test/resources/helloworld")))]
+    (doseq [response-body response-bodies]
+      (let [server-response {:body response-body :status 201 :headers {"Content-type" "text/html; charset=utf-8"}}
+            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+                               :status  201
+                               :body    "Hello world"}]
+
+        (testing (format "testing %s" (type response-body))
+          (verify-response server-response
+                           expected-response))))))
+
+(deftest can-use-map-as-response-body-without-explicit-status
+  (let [response-bodies (list
+                          (CustomStreamableType.)
+                          "Hello world"
+                          (.getBytes "Hello world")
+                          (ByteArrayInputStream. (.getBytes "Hello world"))
+                          (File. (str (bfs/cwd) "/test/resources/helloworld")))]
+
+    (doseq [response-body response-bodies]
+      (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
+            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+                               :status  200
+                               :body    "Hello world"}]
+
+        (testing (format "testing %s" (type response-body))
+          (verify-response server-response
+                           expected-response))))))
+
+
 (deftest can-use-record-as-response
   (doseq [response-body (list
+                          (CustomStreamableType.)
                           "Hello world"
                           (.getBytes "Hello world")
                           (ByteArrayInputStream. (.getBytes "Hello world"))
