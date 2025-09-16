@@ -13,7 +13,7 @@ web app, while avoiding adding any new major dependencies on the classpath.
 ## Installation
 Add ring-http-exchange to dependency list
 ```clojure
-[org.clojars.jj/ring-http-exchange "1.2.2"]
+[org.clojars.jj/ring-http-exchange "1.2.3"]
 ```
 
 
