@@ -1,6 +1,5 @@
 (ns ring-http-exchange.core-test
   (:require
-    [babashka.fs :as bfs]
     [clj-http.client :as client]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
@@ -13,6 +12,8 @@
            (java.util Base64)
            (java.util.concurrent Executors)
            (sun.net.httpserver FixedLengthInputStream)))
+
+(defn- cwd [] (System/getProperty "user.dir"))
 
 (def default-password "password")
 (defrecord Response [body headers status])
@@ -149,7 +150,7 @@
 (deftest non-existing-body-returns-500-internal-server-error
   (let [server-response {:status  200
                          :headers {"Content-type" "text/html; charset=utf-8"}
-                         :body    (File. (str (bfs/cwd) "/test/resources/not-existing"))}
+                         :body    (File. (str (cwd) "/test/resources/not-existing"))}
 
         expected-response {:status  500
                            :headers {"Content-type" "text/html"}
@@ -334,7 +335,7 @@
                           "Hello world"
                           (.getBytes "Hello world")
                           (ByteArrayInputStream. (.getBytes "Hello world"))
-                          (File. (str (bfs/cwd) "/test/resources/helloworld")))]
+                          (File. (str (cwd) "/test/resources/helloworld")))]
     (doseq [response-body response-bodies]
       (let [server-response {:body response-body :status 201 :headers {"Content-type" "text/html; charset=utf-8"}}
             expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
@@ -351,7 +352,7 @@
                           "Hello world"
                           (.getBytes "Hello world")
                           (ByteArrayInputStream. (.getBytes "Hello world"))
-                          (File. (str (bfs/cwd) "/test/resources/helloworld")))]
+                          (File. (str (cwd) "/test/resources/helloworld")))]
 
     (doseq [response-body response-bodies]
       (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
@@ -370,7 +371,7 @@
                           "Hello world"
                           (.getBytes "Hello world")
                           (ByteArrayInputStream. (.getBytes "Hello world"))
-                          (File. (str (bfs/cwd) "/test/resources/helloworld")))]
+                          (File. (str (cwd) "/test/resources/helloworld")))]
 
     (let [server-response (Response. response-body {"Content-type" "text/html; charset=utf-8"} 200)
           expected-response {:status  200

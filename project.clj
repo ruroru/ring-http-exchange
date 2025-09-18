@@ -15,8 +15,7 @@
 
   :profiles {:test {:resource-paths ["test/resources"]
                     :source-paths   ["test/clojure"]
-                    :dependencies   [[babashka/fs "0.5.27"]
-                                     [clj-http "3.13.1"]]}}
+                    :dependencies   [[clj-http "3.13.1"]]}}
 
   :plugins [[org.clojars.jj/bump "1.0.4"]
             [org.clojars.jj/bump-md "1.1.0"]
