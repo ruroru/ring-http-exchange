@@ -122,17 +122,17 @@
 
 
 (defn- send-file [^HttpExchange exchange response ^File body]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response ))
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (let [content-length (.length body)]
-    (.sendResponseHeaders exchange (:status response  200) content-length))
+    (.sendResponseHeaders exchange (:status response 200) content-length))
   (with-open [in ^InputStream (FileInputStream. body)
               out ^OutputStream (.getResponseBody exchange)]
     (.transferTo ^FileInputStream in out)))
 
 
 (defn- send-input-stream [^HttpExchange exchange response ^InputStream in]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response ))
-  (.sendResponseHeaders exchange (:status response  200) 0)
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (.sendResponseHeaders exchange (:status response 200) 0)
   (let [out ^OutputStream (.getResponseBody exchange)]
     (.transferTo ^InputStream in out)
     (.close in)
@@ -141,9 +141,9 @@
 
 
 (defn- send-byte-array [^HttpExchange exchange response body]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response ))
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (let [content-length (alength ^"[B" body)]
-    (.sendResponseHeaders exchange (:status response  200) content-length))
+    (.sendResponseHeaders exchange (:status response 200) content-length))
   (let [out ^OutputStream (.getResponseBody exchange)]
     (.write ^OutputStream out ^"[B" body)
     (.flush out)
@@ -155,8 +155,8 @@
 
 
 (defn- send-streamable [^HttpExchange exchange response body]
-  (set-response-headers (.getResponseHeaders exchange) (:headers response ))
-  (.sendResponseHeaders exchange (:status response  200) 0)
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (.sendResponseHeaders exchange (:status response 200) 0)
   (with-open [out ^OutputStream (.getResponseBody exchange)]
     (protocols/write-body-to-stream body response out)))
 
@@ -273,3 +273,11 @@
         (catch Throwable t
           (logger/error (.getMessage t))
           (throw t))))))
+
+(defn restart-http-server
+  "restarts HttpServer with an optional delay (in seconds) to allow active request to finish."
+  ([^HttpServer server handler server-config]
+   (restart-http-server server handler server-config 0))
+  ([^HttpServer server handler server-config delay]
+   (doto server (.stop delay))
+   (run-http-server handler server-config)))

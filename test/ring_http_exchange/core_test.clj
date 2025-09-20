@@ -380,3 +380,20 @@
 
       (verify-response server-response
                        expected-response))))
+
+(deftest can-restart-server
+  (let [port 8083
+        handler (fn [_]
+                  {:status  200
+                   :headers {}
+                   :body    ""})
+        server-config {:executor (Executors/newVirtualThreadPerTaskExecutor)
+                       :port     port}
+        server (server/run-http-server handler server-config)
+        response (client/get (format "http://localhost:%s/" port))]
+    (is (= 200 (:status response)))
+    (let [new-server (server/restart-http-server server handler server-config)
+          response-after-restart (client/get (format "http://localhost:%s/" port))]
+      (client/get (format "http://localhost:%s/" port))
+      (is (= 200 (:status response-after-restart)))
+      (server/stop-http-server new-server))))
