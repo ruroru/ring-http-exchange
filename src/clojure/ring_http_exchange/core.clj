@@ -31,15 +31,15 @@
     (str/join comma header-list)))
 
 
+(defn- get-header-map [m ^Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry header]
+  (let [key (.getKey header)
+        value (get-header-value (.getValue header))]
+    (assoc! m key value)))
+
 (defn- get-request-headers [^Set entry-set]
   (persistent!
-    (reduce
-      (fn [m ^Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry header]
-        (let [key (.getKey header)
-              value (get-header-value (.getValue header))]
-          (assoc! m key value)))
-      (transient {})
-      entry-set)))
+    (reduce get-header-map (transient {})
+            entry-set)))
 
 
 (defn- set-response-headers [^Headers response-headers resp-headers]
@@ -51,12 +51,12 @@
 (defn- get-request-method [^String method]
   (method-cache method (keyword (.toLowerCase method))))
 
+(defn- convert-certificate [certificate] (cast X509Certificate certificate))
 
 (defn- get-certificate [^SSLSession session]
   (try
     (map
-      (fn [certificate]
-        (cast X509Certificate certificate))
+      convert-certificate
       (.getPeerCertificates session))
     (catch Exception t
       (when (logger/enabled? :debug)
