@@ -14,11 +14,6 @@
 (s/def ::port (s/int-in 1 65536))
 
 (def ^:const ^:private comma ",")
-(def ^:const ^:private content-type "Content-type")
-(def ^:const ^:private index-path "/")
-(def ^:const ^:private internal-server-error "Internal Server Error")
-(def ^:const ^:private default-host "0.0.0.0")
-(def ^:const ^:private text-html "text/html")
 (def ^:const ^:private method-cache (into {}
                                           (for [method ["get" "post" "put" "patch" "delete" "head" "options" "trace"]]
                                             (let [uppercase-method (clojure.string/upper-case method)
@@ -117,8 +112,8 @@
        (catch Throwable t
          (logger/error (.getMessage ^Throwable t))
          {:status  500
-          :body    internal-server-error
-          :headers {content-type text-html}})))
+          :body    "Internal Server Error"
+          :headers {"Content-type" "text/html"}})))
 
 
 (defn- send-file [^HttpExchange exchange response ^File body]
@@ -163,8 +158,8 @@
 
 (defn- send-error [^HttpExchange exchange]
   (send-string exchange {:status  500
-                         :body    internal-server-error
-                         :headers {content-type text-html}} internal-server-error))
+                         :body    "Internal Server Error"
+                         :headers {"Content-type" "text/html"}} "Internal Server Error"))
 
 
 (defn- send-exchange-response [^HttpExchange exchange response]
@@ -201,7 +196,7 @@
 (defmethod ^:private get-server :with-client-cert [host port backlog _ handler ssl-context & _]
   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-    (.createContext server index-path (HandlerWithClientCert. host port handler))
+    (.createContext server "/" (HandlerWithClientCert. host port handler))
     server))
 
 (deftype HandlerWithoutClientCert [host port handler]
@@ -215,7 +210,7 @@
 (defmethod ^:private get-server :without-client-cert [host port backlog handler ssl-context & _]
   (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
     (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-    (.createContext server index-path (HandlerWithoutClientCert. host port handler))
+    (.createContext server "/" (HandlerWithoutClientCert. host port handler))
     server))
 
 (deftype UnsecureHandler [host port handler]
@@ -228,7 +223,7 @@
 
 (defmethod ^:private get-server :no-tls [host port backlog handler & _]
   (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-    (.createContext server index-path (UnsecureHandler. host port handler))
+    (.createContext server "/" (UnsecureHandler. host port handler))
     server))
 
 
@@ -258,7 +253,7 @@
                    executor
                    get-ssl-client-cert?
                    backlog]
-            :or   {host                 default-host
+            :or   {host                 "0.0.0.0"
                    port                 8080
                    ssl-context          nil
                    executor             (Executors/newCachedThreadPool)
