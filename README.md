@@ -61,9 +61,6 @@ For better performance, [robaho httpserver](https://github.com/robaho/httpserver
 | `executor`    | Executor to be used                          | CachedThreadPool |
 | `ssl-context` | Ssl context to be used in https configurator | nil              |
 
-### Limitations
-
-* `Transfer-Encoding` header will be set to `chunked`, if it is not possible to get length of the body.
 
 ## License
 
