@@ -54,12 +54,12 @@ For better performance, [robaho httpserver](https://github.com/robaho/httpserver
 
 ### Server configuration
 
-| Property      | Description                                  | Default value    |
-|---------------|----------------------------------------------|------------------|
-| `host`        | Host name                                    | 0.0.0.0          | 
-| `port`        | Application port                             | 8080             |
-| `executor`    | Executor to be used                          | CachedThreadPool |
-| `ssl-context` | Ssl context to be used in https configurator | nil              |
+| Property      | Description                                  | Default value         |
+|---------------|----------------------------------------------|-----------------------|
+| `host`        | Host name                                    | 0.0.0.0               | 
+| `port`        | Application port                             | 8080                  |
+| `executor`    | Executor to be used                          | VirtualThreadExecutor |
+| `ssl-context` | Ssl context to be used in https configurator | nil                   |
 
 
 ## License

@@ -15,7 +15,8 @@
 
   :profiles {:test {:resource-paths ["test/resources"]
                     :source-paths   ["test/clojure"]
-                    :dependencies   [[clj-http "3.13.1"]]}}
+                    :dependencies   [[clj-http "3.13.1"]
+                                     [mock-clj "0.2.1"]]}}
 
   :plugins [[org.clojars.jj/bump "1.0.4"]
             [org.clojars.jj/bump-md "1.1.0"]
