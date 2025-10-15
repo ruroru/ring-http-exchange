@@ -50,9 +50,7 @@
 
 (defn- get-certificate [^SSLSession session]
   (try
-    (map
-      convert-certificate
-      (.getPeerCertificates session))
+    (map convert-certificate (.getPeerCertificates session))
     (catch Exception t
       (when (logger/enabled? :debug)
         (logger/debugf "Unable to parse certificate due to: %s" (.getMessage ^Throwable t)))
@@ -116,115 +114,113 @@
           :headers {"Content-type" "text/html"}})))
 
 
-(defn- send-file [^HttpExchange exchange response ^File body]
+(defn- send-file [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
-  (let [content-length (.length body)]
-    (.sendResponseHeaders exchange (:status response 200) content-length))
-  (with-open [in ^InputStream (FileInputStream. body)
-              out ^OutputStream (.getResponseBody exchange)]
-    (.transferTo ^FileInputStream in out)))
+  (let [body ^File (:body response)
+        content-length (.length body)]
+    (.sendResponseHeaders exchange (:status response 200) content-length)
+    (with-open [in ^InputStream (FileInputStream. body)
+                out ^OutputStream (.getResponseBody exchange)]
+      (.transferTo ^FileInputStream in out))))
 
 
-(defn- send-input-stream [^HttpExchange exchange response ^InputStream in]
+(defn- send-input-stream [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (.sendResponseHeaders exchange (:status response 200) 0)
-  (let [out ^OutputStream (.getResponseBody exchange)]
+  (let [in ^InputStream (:body response)
+        out ^OutputStream (.getResponseBody exchange)]
     (.transferTo ^InputStream in out)
     (.close in)
     (.flush out)
     (.close out)))
 
-
-(defn- send-byte-array [^HttpExchange exchange response body]
+(defn- send-string [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
-  (let [content-length (alength ^"[B" body)]
-    (.sendResponseHeaders exchange (:status response 200) content-length))
-  (let [out ^OutputStream (.getResponseBody exchange)]
-    (.write ^OutputStream out ^"[B" body)
-    (.flush out)
-    (.close out)))
+  (let [body (:body response)
+        bytes (.getBytes ^String body "UTF-8")
+        content-length (alength bytes)]
+    (.sendResponseHeaders exchange (:status response 200) content-length)
+    (let [out ^OutputStream (.getResponseBody exchange)]
+      (.write out bytes)
+      (.flush out)
+      (.close out))))
 
+(defn- send-byte-array [^HttpExchange exchange response]
+  (set-response-headers (.getResponseHeaders exchange) (:headers response))
+  (let [body (:body response)
+        content-length (alength ^"[B" body)]
+    (.sendResponseHeaders exchange (:status response 200) content-length)
+    (let [out ^OutputStream (.getResponseBody exchange)]
+      (.write out ^"[B" body)
+      (.flush out)
+      (.close out))))
 
-(defn- send-string [^HttpExchange exchange response body]
-  (send-byte-array exchange response (.getBytes ^String body)))
-
-
-(defn- send-streamable [^HttpExchange exchange response body]
+(defn- send-streamable [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (.sendResponseHeaders exchange (:status response 200) 0)
   (with-open [out ^OutputStream (.getResponseBody exchange)]
-    (protocols/write-body-to-stream body response out)))
+    (let [body (:body response)]
+      (protocols/write-body-to-stream body response out))))
 
 
 (defn- send-error [^HttpExchange exchange]
   (send-string exchange {:status  500
                          :body    "Internal Server Error"
-                         :headers {"Content-type" "text/html"}} "Internal Server Error"))
+                         :headers {"Content-type" "text/html"}}))
 
 
 (defn- send-exchange-response [^HttpExchange exchange response]
-
   (if response
     (let [body (:body response)]
-      (cond
-        (instance? String body) (send-string exchange response body)
-        (instance? File body) (if
-                                (.exists ^File body)
-                                (send-file exchange response body)
-                                (send-error exchange))
-        (instance? InputStream body) (send-input-stream exchange response body)
-        (bytes? body) (send-byte-array exchange response body)
-        (satisfies? protocols/StreamableResponseBody body) (send-streamable exchange response body)
-        :else (send-error exchange)))
+      (if (instance? String body)
+        (send-string exchange response)
+        (if (instance? InputStream body)
+          (send-input-stream exchange response)
+          (if (instance? File body)
+            (if (.exists ^File body)
+              (send-file exchange response)
+              (send-error exchange))
+            (if (bytes? body)
+              (send-byte-array exchange response)
+              (if (satisfies? protocols/StreamableResponseBody body)
+                (send-streamable exchange response)
+                (send-error exchange)))))))
     (send-error exchange)))
 
-
-(defmulti get-server (fn [_ _ _ _ ssl-context get-ssl-client-cert?]
-                       (case [(nil? ssl-context) get-ssl-client-cert?]
-                         [false true] :with-client-cert
-                         [false false] :without-client-cert
-                         :no-tls)))
 
 (deftype HandlerWithClientCert [host port handler]
   HttpHandler
   (handle [_ exchange]
-    (->> (get-https-mtls-exchange-request-map host port exchange)
-         (get-exchange-response handler)
-         (send-exchange-response exchange))
+    (let [request-map (get-https-mtls-exchange-request-map host port exchange)]
+      (send-exchange-response exchange (get-exchange-response handler request-map)))
     (.close exchange)))
-
-(defmethod ^:private get-server :with-client-cert [host port backlog _ handler ssl-context & _]
-  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-    (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-    (.createContext server "/" (HandlerWithClientCert. host port handler))
-    server))
 
 (deftype HandlerWithoutClientCert [host port handler]
   HttpHandler
   (handle [_ exchange]
-    (->> (get-https-exchange-request-map host port exchange)
-         (get-exchange-response handler)
-         (send-exchange-response exchange))
+    (let [request-map (get-https-exchange-request-map host port exchange)]
+      (send-exchange-response exchange (get-exchange-response handler request-map)))
     (.close exchange)))
-
-(defmethod ^:private get-server :without-client-cert [host port backlog handler ssl-context & _]
-  (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-    (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-    (.createContext server "/" (HandlerWithoutClientCert. host port handler))
-    server))
 
 (deftype UnsecureHandler [host port handler]
   HttpHandler
   (handle [_ exchange]
-    (->> (get-http-exchange-request-map host port exchange)
-         (get-exchange-response handler)
-         (send-exchange-response exchange))
+    (let [request-map (get-http-exchange-request-map host port exchange)]
+      (send-exchange-response exchange (get-exchange-response handler request-map)))
     (.close exchange)))
 
-(defmethod ^:private get-server :no-tls [host port backlog handler & _]
-  (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-    (.createContext server "/" (UnsecureHandler. host port handler))
-    server))
+(defn- create-server [host port backlog handler ssl-context get-ssl-client-cert?]
+  (let [index-route "/"]
+    (if ssl-context
+      (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
+        (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+        (if get-ssl-client-cert?
+          (.createContext server index-route (HandlerWithClientCert. host port handler))
+          (.createContext server index-route (HandlerWithoutClientCert. host port handler)))
+        server)
+      (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
+        (.createContext server index-route (UnsecureHandler. host port handler))
+        server))))
 
 
 (defn stop-http-server
@@ -271,7 +267,7 @@
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)}}]
   (when (s/valid? ::port port)
-    (let [^HttpServer server (get-server host port backlog handler ssl-context get-ssl-client-cert?)]
+    (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert?)]
       (try
         (doto server
           (.setExecutor executor)
