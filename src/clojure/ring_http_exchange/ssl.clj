@@ -4,10 +4,16 @@
            (javax.net.ssl KeyManagerFactory SSLContext TrustManagerFactory)))
 
 
-(defn- load-keystore [^KeyStore keystore ^String key-password]
-  (with-open [in (io/input-stream keystore)]
-    (doto (KeyStore/getInstance (KeyStore/getDefaultType))
-      (.load in (.toCharArray key-password)))))
+(defn- load-keystore [keystore ^String key-password]
+  (cond
+    (instance? KeyStore keystore)
+    keystore
+
+    :else
+    (with-open [in (io/input-stream keystore)]
+      (doto (KeyStore/getInstance (KeyStore/getDefaultType))
+        (.load in (.toCharArray key-password))))))
+
 
 (defn- keystore->key-managers [^KeyStore keystore ^String key-password]
   (.getKeyManagers
@@ -33,5 +39,9 @@
            (truststore->trust-managers truststore)
            nil)))))
   ([keystore key-password truststore trust-password]
-   (keystore->ssl-context keystore key-password truststore trust-password "TLS")))
+   (keystore->ssl-context keystore key-password truststore trust-password "TLS"))
+  ([keystore key-password instance-protocol]
+   (keystore->ssl-context keystore key-password nil nil instance-protocol))
+  ([keystore key-password]
+   (keystore->ssl-context keystore key-password "TLS")))
 

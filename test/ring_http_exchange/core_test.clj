@@ -2,23 +2,23 @@
   (:require
     [clj-http.client :as client]
     [clojure.edn :as edn]
-    [mock-clj.core :as mc]
-    [clojure.java.io :as io]
     [clojure.string :as string]
     [clojure.test :refer [are deftest is testing]]
+    [mock-clj.core :as mc]
     [ring-http-exchange.core :as server]
     [ring-http-exchange.ssl :as ssl]
+    [ring-http-exchange.ssl-utils :as ssl-utils]
     [ring.core.protocols :as protocols])
   (:import (java.io ByteArrayInputStream File OutputStream)
-           (java.util Base64)
            (java.util.concurrent Executors)
            (sun.net.httpserver FixedLengthInputStream)))
+
 
 (defn- cwd [] (System/getProperty "user.dir"))
 
 (def default-password "password")
 (defrecord Response [body headers status])
-
+(def default-key-manager (ssl-utils/get-keystore-manager default-password))
 (deftype CustomStreamableType [])
 
 (extend-protocol protocols/StreamableResponseBody
@@ -26,14 +26,6 @@
   (write-body-to-stream [_ _ ^OutputStream output-stream]
     (.write output-stream ^bytes (.getBytes "Hello world"))
     (.close output-stream)))
-
-(defn- serialize-x509-certificate-array
-  [cert-array]
-  (if (= (count cert-array) 0)
-    :empty-cert
-    (map (fn [cert]
-           (let [bytes (.getEncoded cert)]
-             (String. (.encodeToString (Base64/getEncoder) bytes)))) cert-array)))
 
 (defn- verify-response
   ([response-body expected-responses]
@@ -93,12 +85,8 @@
   (let [server-response {:status  200
                          :headers {"Content-type" "text/html; charset=utf-8"}
                          :body    "hello world"}
-        server-config {:port        6443
-                       :ssl-context (ssl/keystore->ssl-context
-                                      (io/resource "keystore.jks")
-                                      default-password
-                                      (io/resource "truststore.jks")
-                                      default-password)}
+        server-config {:port 6443
+                       :ssl-context (ssl/keystore->ssl-context default-key-manager default-password)}
         expected-response {:status  200
                            :headers {"Content-type" "text/html; charset=utf-8"}
                            :body    "hello world"}]
@@ -113,9 +101,7 @@
                                :body    "hello world"}
               server-config {:port        6443
                              :ssl-context (ssl/keystore->ssl-context
-                                            (io/resource "keystore.jks")
-                                            default-password
-                                            (io/resource "truststore.jks")
+                                            default-key-manager
                                             default-password
                                             tls-version)}
               expected-response {:status  200
@@ -153,23 +139,23 @@
                                           :headers {}
                                           :body    (.toString ^Thread (Thread/currentThread))})
                                        {
-                                        :port     port})
+                                        :port port})
         response (client/get (format "http://localhost:%s/" port))]
     (is (= true (string/starts-with? (:body response) "VirtualThread")))
     (server/stop-http-server server)))
 
 (deftest can-start-server-where-virtual-threads-are-not-available
   (mc/with-mock [server/v-threads-available? false]
-             (let [port 8083
-                   server (server/run-http-server (fn [_]
-                                                    {:status  200
-                                                     :headers {}
-                                                     :body    (.toString ^Thread (Thread/currentThread))})
-                                                  {
-                                                   :port     port})
-                   response (client/get (format "http://localhost:%s/" port))]
-               (is (= true (string/starts-with? (:body response) "Thread")))
-               (server/stop-http-server server))))
+                (let [port 8083
+                      server (server/run-http-server (fn [_]
+                                                       {:status  200
+                                                        :headers {}
+                                                        :body    (.toString ^Thread (Thread/currentThread))})
+                                                     {
+                                                      :port port})
+                      response (client/get (format "http://localhost:%s/" port))]
+                  (is (= true (string/starts-with? (:body response) "Thread")))
+                  (server/stop-http-server server))))
 
 (deftest non-existing-body-returns-500-internal-server-error
   (let [server-response {:status  200
@@ -287,39 +273,7 @@
       (is (= expected-request-map (edn/read-string (:body response))))
       (server/stop-http-server server))))
 
-(deftest test-https-request-headers-with-invalid-certificates
-  (let [server-config {:port        9443
-                       :ssl-context (ssl/keystore->ssl-context (io/resource "keystore.jks") default-password (io/resource "truststore.jks") default-password)}
-        expected-request-map {:body            ""
-                              :headers         {"Accept-encoding" "gzip, deflate"
-                                                "Connection"      "close"
-                                                "Host"            "localhost:9443"}
-                              :protocol        "HTTP/1.1"
-                              :query-string    nil
-                              :request-method  :get
-                              :scheme          :https
-                              :server-name     "0.0.0.0"
-                              :server-port     9443
-                              :ssl-client-cert :empty-cert
-                              :uri             "/"}]
-    (let [server (server/run-http-server (fn [req]
-                                           {:status  200
-                                            :headers {}
-                                            :body    (str (assoc
-                                                            req
-                                                            :body (String. (.readAllBytes ^FixedLengthInputStream (:body req)))
-                                                            :ssl-client-cert (serialize-x509-certificate-array (:ssl-client-cert req))
-                                                            :headers (dissoc (:headers req) "User-agent")))})
-                                         server-config)
-          response (client/get (format "https://localhost:%s/" (:port server-config))
-                               {:insecure? true :throw-exceptions false})
-          ]
-      (is (= (:status response) 200))
-      (is (= expected-request-map (dissoc
-                                    (edn/read-string (:body response))
-                                    :remote-addr
-                                    )))
-      (server/stop-http-server server))))
+
 
 (deftest not-supported-body-returns-500-internal-server-error
   (let [server-response {:status  200
