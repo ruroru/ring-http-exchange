@@ -126,10 +126,11 @@
                                          {:status  200
                                           :headers {}
                                           :body    (.toString ^Thread (Thread/currentThread))})
-                                       {:executor (Executors/newWorkStealingPool 2)
+                                       {:executor (Executors/newVirtualThreadPerTaskExecutor)
                                         :port     port})
         response (client/get (format "http://localhost:%s/" port))]
-    (is (= true (string/includes? (:body response) "ForkJoinPool")))
+    (println (:body response))
+    (is (= true (string/includes? (:body response) "VirtualThread")))
     (server/stop-http-server server)))
 
 (deftest by-default-uses-virtual-thread-executor
@@ -141,21 +142,8 @@
                                        {
                                         :port port})
         response (client/get (format "http://localhost:%s/" port))]
-    (is (= true (string/starts-with? (:body response) "VirtualThread")))
+    (is (= true (string/starts-with? (:body response) "Thread[#")))
     (server/stop-http-server server)))
-
-(deftest can-start-server-where-virtual-threads-are-not-available
-  (mc/with-mock [server/v-threads-available? false]
-                (let [port 8083
-                      server (server/run-http-server (fn [_]
-                                                       {:status  200
-                                                        :headers {}
-                                                        :body    (.toString ^Thread (Thread/currentThread))})
-                                                     {
-                                                      :port port})
-                      response (client/get (format "http://localhost:%s/" port))]
-                  (is (= true (string/starts-with? (:body response) "Thread")))
-                  (server/stop-http-server server))))
 
 (deftest non-existing-body-returns-500-internal-server-error
   (let [server-response {:status  200

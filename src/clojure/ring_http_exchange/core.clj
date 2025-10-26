@@ -231,18 +231,6 @@
   ([^HttpServer server delay]
    (doto server (.stop delay))))
 
-(defn- v-threads-available? []
-  (try
-    (Class/forName "java.lang.Thread$Builder$OfVirtual")
-    true
-    (catch ClassNotFoundException _
-      false)))
-
-(defn- get-default-executor []
-  (if (v-threads-available?)
-    (Executors/newVirtualThreadPerTaskExecutor)
-    (Executors/newCachedThreadPool)))
-
 (defn run-http-server
   "Start a com.sun.net.httpserver.HttpServer to serve the given
   handler according to the supplied options:
@@ -250,7 +238,7 @@
   :port                 - the port to listen on (defaults to 8080)
   :host                 - the hostname to listen on (defaults to 127.0.0.1)
   :ssl-context          - the ssl context, that is used in https server
-  :executor             - executor to use in HttpServer, will default to ThreadPoolExecutor
+  :executor             - executor to use in HttpServer, will default to Work Stealing Pool
   :get-ssl-client-cert? - a boolean value indicating whether to enable mutual TLS (mTLS), will default to false.
   :backlog              - size of a backlog, defaults to 8192"
 
@@ -263,7 +251,7 @@
             :or   {host                 "0.0.0.0"
                    port                 8080
                    ssl-context          nil
-                   executor             (get-default-executor)
+                   executor             (Executors/newWorkStealingPool)
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)}}]
   (when (s/valid? ::port port)
