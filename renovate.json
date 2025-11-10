@@ -3,5 +3,8 @@
   "extends": [
     "config:recommended"
   ],
-  "baseBranches": ["master"]
+  "baseBranches": ["master"],
+  "automerge": true,
+  "automergeType": "pr",
+  "automergeStrategy": "squash"
 }

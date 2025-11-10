@@ -4,7 +4,6 @@
     [clojure.edn :as edn]
     [clojure.string :as string]
     [clojure.test :refer [are deftest is testing]]
-    [mock-clj.core :as mc]
     [ring-http-exchange.core :as server]
     [ring-http-exchange.ssl :as ssl]
     [ring-http-exchange.ssl-utils :as ssl-utils]
