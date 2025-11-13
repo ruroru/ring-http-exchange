@@ -1,8 +1,7 @@
 # ring-http-exchange
 
 Clojure [ring](https://github.com/ring-clojure/ring) adapter for
-[
-`com.sun.net.httpserver.HttpServer`](https://docs.oracle.com/javase/8/docs/jre/api/net/httpserver/spec/com/sun/net/httpserver/HttpServer.html)
+[`com.sun.net.httpserver.HttpServer`](https://docs.oracle.com/javase/8/docs/jre/api/net/httpserver/spec/com/sun/net/httpserver/HttpServer.html)
 which is included in the JDK.
 
 The main motivation for this is to support starting a small HTTP
@@ -17,15 +16,6 @@ Add ring-http-exchange to dependency list
 
 ```clojure
 [org.clojars.jj/ring-http-exchange "1.2.5"]
-```
-
-### robaho httpserver
-
-For better performance, [robaho httpserver](https://github.com/robaho/httpserver) can be added to the dependency list.
-It is a drop-in replacement for a ``com.sun.net.httpserver``
-
-```clojure
-[io.github.robaho/httpserver "1.0.27"]
 ```
 
 ## Usage
@@ -65,6 +55,26 @@ It is a drop-in replacement for a ``com.sun.net.httpserver``
 | `port`        | Application port                             | 8080                |
 | `executor`    | Executor to be used                          | newWorkStealingPool |
 | `ssl-context` | Ssl context to be used in https configurator | nil                 |
+
+## Performance Tips
+
+### Executor
+
+To increase performance you can pick executor depending on the use case
+
+| Use case   | Executor                                                                         |
+|------------|----------------------------------------------------------------------------------|
+| Throughput | `Executors/newVirtualThreadPerTaskExecutor`                                      |
+| Latency    | [NioEventLoopGroup](https://mvnrepository.com/artifact/io.netty/netty-transport) |
+
+### Robaho httpserver
+
+[Robaho httpserver](https://github.com/robaho/httpserver) can be added to the dependency list,
+which is a drop-in replacement for a ``com.sun.net.httpserver``
+
+```clojure
+[io.github.robaho/httpserver "1.0.29"]
+```
 
 ## License
 
