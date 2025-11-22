@@ -1,7 +1,8 @@
 # ring-http-exchange
 
 Clojure [ring](https://github.com/ring-clojure/ring) adapter for
-[`com.sun.net.httpserver.HttpServer`](https://docs.oracle.com/javase/8/docs/jre/api/net/httpserver/spec/com/sun/net/httpserver/HttpServer.html)
+[
+`com.sun.net.httpserver.HttpServer`](https://docs.oracle.com/javase/8/docs/jre/api/net/httpserver/spec/com/sun/net/httpserver/HttpServer.html)
 which is included in the JDK.
 
 The main motivation for this is to support starting a small HTTP
@@ -49,12 +50,12 @@ Add ring-http-exchange to dependency list
 
 ### Server configuration
 
-| Property      | Description                                  | Default value       |
-|---------------|----------------------------------------------|---------------------|
-| `host`        | Host name                                    | 0.0.0.0             | 
-| `port`        | Application port                             | 8080                |
-| `executor`    | Executor to be used                          | newWorkStealingPool |
-| `ssl-context` | Ssl context to be used in https configurator | nil                 |
+| Property      | Description                                  | Default value         |
+|---------------|----------------------------------------------|-----------------------|
+| `host`        | Host name                                    | 0.0.0.0               | 
+| `port`        | Application port                             | 8080                  |
+| `executor`    | Executor to be used                          | ThreadPerTaskExecutor |
+| `ssl-context` | Ssl context to be used in https configurator | nil                   |
 
 ## Performance Tips
 

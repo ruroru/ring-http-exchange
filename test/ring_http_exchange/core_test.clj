@@ -141,7 +141,7 @@
                                        {
                                         :port port})
         response (client/get (format "http://localhost:%s/" port))]
-    (is (= true (string/starts-with? (:body response) "Thread[#")))
+    (is (= true (string/starts-with? (:body response) "VirtualThread")))
     (server/stop-http-server server)))
 
 (deftest non-existing-body-returns-500-internal-server-error

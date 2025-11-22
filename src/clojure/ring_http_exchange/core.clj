@@ -7,18 +7,22 @@
            (java.io File FileInputStream InputStream OutputStream)
            (java.net InetSocketAddress)
            (java.security.cert X509Certificate)
-           (java.util Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry List Set)
+           (java.util Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry List Map Set)
            (java.util.concurrent Executors)
            (javax.net.ssl SSLSession)))
 
 (s/def ::port (s/int-in 1 65536))
 
 (def ^:const ^:private comma ",")
-(def ^:const ^:private method-cache (into {}
-                                          (for [method ["get" "post" "put" "patch" "delete" "head" "options" "trace"]]
-                                            (let [uppercase-method (clojure.string/upper-case method)
-                                                  keyword-method (keyword method)]
-                                              [uppercase-method keyword-method]))))
+(def ^:private method-cache ^Map (Map/of
+                                   "GET" :get
+                                   "POST" :post
+                                   "PUT" :put
+                                   "PATCH" :patch
+                                   "DELETE" :delete
+                                   "HEAD" :head
+                                   "OPTIONS" :options
+                                   "TRACE" :trace))
 
 (defn- get-header-value [^List header-list]
   (if (= 1 (.size ^List header-list))
@@ -44,7 +48,8 @@
 
 
 (defn- get-request-method [^String method]
-  (method-cache method (keyword (.toLowerCase method))))
+  (or (.get ^Map method-cache method)
+      (keyword (.toLowerCase method))))
 
 (defn- convert-certificate [certificate] (cast X509Certificate certificate))
 
@@ -238,7 +243,7 @@
   :port                 - the port to listen on (defaults to 8080)
   :host                 - the hostname to listen on (defaults to 127.0.0.1)
   :ssl-context          - the ssl context, that is used in https server
-  :executor             - executor to use in HttpServer, will default to Work Stealing Pool
+  :executor             - executor to use in HttpServer, will default to ThreadPerTaskExecutor
   :get-ssl-client-cert? - a boolean value indicating whether to enable mutual TLS (mTLS), will default to false.
   :backlog              - size of a backlog, defaults to 8192"
 
@@ -251,7 +256,7 @@
             :or   {host                 "0.0.0.0"
                    port                 8080
                    ssl-context          nil
-                   executor             (Executors/newWorkStealingPool)
+                   executor             (Executors/newVirtualThreadPerTaskExecutor)
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)}}]
   (when (s/valid? ::port port)
