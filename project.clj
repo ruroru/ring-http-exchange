@@ -17,7 +17,7 @@
                     :source-paths   ["test/clojure"]
                     :dependencies   [[clj-http "3.13.1"]
                                      [org.bouncycastle/bcprov-jdk18on "1.82"]
-                                     [org.bouncycastle/bcpkix-jdk18on "1.82"]
+                                     [org.bouncycastle/bcpkix-jdk18on "1.83"]
                                      [mock-clj "0.2.1"]]}}
 
   :plugins [[org.clojars.jj/bump "1.0.4"]
