@@ -343,8 +343,7 @@
                              :headers {"Content-type" "text/html; charset=utf-8"}
                              :body    "Hello world"}]
 
-      (verify-response server-response
-                       expected-response))))
+      (verify-response server-response {:record-support? true} expected-response))))
 
 (deftest can-restart-server
   (let [port 8083

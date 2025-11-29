@@ -119,7 +119,7 @@
           :headers {"Content-type" "text/html"}})))
 
 
-(defn- send-file [^HttpExchange exchange response]
+(defn- send-record-file [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (let [body ^File (:body response)
         content-length (.length body)]
@@ -128,8 +128,27 @@
                 out ^OutputStream (.getResponseBody exchange)]
       (.transferTo ^FileInputStream in out))))
 
+(defn- send-file [^HttpExchange exchange response]
+  (set-response-headers (.getResponseHeaders exchange) (response :headers ))
+  (let [body ^File (response :body )
+        content-length (.length body)]
+    (.sendResponseHeaders exchange (response :status  200) content-length)
+    (with-open [in ^InputStream (FileInputStream. body)
+                out ^OutputStream (.getResponseBody exchange)]
+      (.transferTo ^FileInputStream in out))))
+
 
 (defn- send-input-stream [^HttpExchange exchange response]
+  (set-response-headers (.getResponseHeaders exchange) (response :headers ))
+  (.sendResponseHeaders exchange (response :status  200) 0)
+  (let [in ^InputStream (response :body )
+        out ^OutputStream (.getResponseBody exchange)]
+    (.transferTo ^InputStream in out)
+    (.close in)
+    (.flush out)
+    (.close out)))
+
+(defn- send-record-input-stream [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (.sendResponseHeaders exchange (:status response 200) 0)
   (let [in ^InputStream (:body response)
@@ -139,7 +158,19 @@
     (.flush out)
     (.close out)))
 
+
 (defn- send-string [^HttpExchange exchange response]
+  (set-response-headers (.getResponseHeaders exchange) (response :headers ))
+  (let [body (response :body )
+        bytes (.getBytes ^String body "UTF-8")
+        content-length (alength bytes)]
+    (.sendResponseHeaders exchange (response :status  200) content-length)
+    (let [out ^OutputStream (.getResponseBody exchange)]
+      (.write out bytes)
+      (.flush out)
+      (.close out))))
+
+(defn- send-record-string [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (let [body (:body response)
         bytes (.getBytes ^String body "UTF-8")
@@ -150,7 +181,18 @@
       (.flush out)
       (.close out))))
 
+
 (defn- send-byte-array [^HttpExchange exchange response]
+  (set-response-headers (.getResponseHeaders exchange) (response :headers ))
+  (let [body (response :body )
+        content-length (alength ^"[B" body)]
+    (.sendResponseHeaders exchange (response :status  200) content-length)
+    (let [out ^OutputStream (.getResponseBody exchange)]
+      (.write out ^"[B" body)
+      (.flush out)
+      (.close out))))
+
+(defn- send-record-byte-array [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
   (let [body (:body response)
         content-length (alength ^"[B" body)]
@@ -159,6 +201,7 @@
       (.write out ^"[B" body)
       (.flush out)
       (.close out))))
+
 
 (defn- send-streamable [^HttpExchange exchange response]
   (set-response-headers (.getResponseHeaders exchange) (:headers response))
@@ -176,7 +219,7 @@
 
 (defn- send-exchange-response [^HttpExchange exchange response]
   (if response
-    (let [body (:body response)]
+    (let [body (response :body)]
       (if (instance? String body)
         (send-string exchange response)
         (if (instance? InputStream body)
@@ -192,12 +235,36 @@
                 (send-error exchange)))))))
     (send-error exchange)))
 
+(defn- send-record-exchange-response [^HttpExchange exchange response]
+  (if response
+    (let [body (:body response)]
+      (if (instance? String body)
+        (send-record-string exchange response)
+        (if (instance? InputStream body)
+          (send-record-input-stream exchange response)
+          (if (instance? File body)
+            (if (.exists ^File body)
+              (send-record-file exchange response)
+              (send-error exchange))
+            (if (bytes? body)
+              (send-record-byte-array exchange response)
+              (if (satisfies? protocols/StreamableResponseBody body)
+                (send-streamable exchange response)
+                (send-error exchange)))))))
+    (send-error exchange)))
 
 (deftype HandlerWithClientCert [host port handler]
   HttpHandler
   (handle [_ exchange]
     (let [request-map (get-https-mtls-exchange-request-map host port exchange)]
       (send-exchange-response exchange (get-exchange-response handler request-map)))
+    (.close exchange)))
+
+(deftype RecordHandlerWithClientCert [host port handler]
+  HttpHandler
+  (handle [_ exchange]
+    (let [request-map (get-https-mtls-exchange-request-map host port exchange)]
+      (send-record-exchange-response exchange (get-exchange-response handler request-map)))
     (.close exchange)))
 
 (deftype HandlerWithoutClientCert [host port handler]
@@ -207,6 +274,13 @@
       (send-exchange-response exchange (get-exchange-response handler request-map)))
     (.close exchange)))
 
+(deftype RecordHandlerWithoutClientCert [host port handler]
+  HttpHandler
+  (handle [_ exchange]
+    (let [request-map (get-https-exchange-request-map host port exchange)]
+      (send-record-exchange-response exchange (get-exchange-response handler request-map)))
+    (.close exchange)))
+
 (deftype UnsecureHandler [host port handler]
   HttpHandler
   (handle [_ exchange]
@@ -214,17 +288,30 @@
       (send-exchange-response exchange (get-exchange-response handler request-map)))
     (.close exchange)))
 
-(defn- create-server [host port backlog handler ssl-context get-ssl-client-cert?]
+(deftype UnsecureRecordHandler [host port handler]
+  HttpHandler
+  (handle [_ exchange]
+    (let [request-map (get-http-exchange-request-map host port exchange)]
+      (send-record-exchange-response exchange (get-exchange-response handler request-map)))
+    (.close exchange)))
+
+(defn- create-server [host port backlog handler ssl-context get-ssl-client-cert? record-support?]
   (let [index-route "/"]
     (if ssl-context
       (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
         (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
         (if get-ssl-client-cert?
-          (.createContext server index-route (HandlerWithClientCert. host port handler))
-          (.createContext server index-route (HandlerWithoutClientCert. host port handler)))
+          (if record-support?
+            (.createContext server index-route (HandlerWithClientCert. host port handler))
+            (.createContext server index-route (RecordHandlerWithClientCert. host port handler)))
+          (if record-support?
+            (.createContext server index-route (HandlerWithoutClientCert. host port handler))
+            (.createContext server index-route (RecordHandlerWithoutClientCert. host port handler))))
         server)
       (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-        (.createContext server index-route (UnsecureHandler. host port handler))
+        (if record-support?
+          (.createContext server index-route (UnsecureRecordHandler. host port handler))
+          (.createContext server index-route (UnsecureHandler. host port handler)))
         server))))
 
 
@@ -252,15 +339,18 @@
                    ssl-context
                    executor
                    get-ssl-client-cert?
-                   backlog]
+                   backlog
+                   record-support?]
             :or   {host                 "0.0.0.0"
                    port                 8080
                    ssl-context          nil
                    executor             (Executors/newVirtualThreadPerTaskExecutor)
                    get-ssl-client-cert? false
-                   backlog              (* 1024 8)}}]
+                   backlog              (* 1024 8)
+                   record-support?      false}
+            }]
   (when (s/valid? ::port port)
-    (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert?)]
+    (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert? record-support?)]
       (try
         (doto server
           (.setExecutor executor)
