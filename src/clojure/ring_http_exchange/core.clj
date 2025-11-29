@@ -66,48 +66,45 @@
         session ^SSLSession (.getSSLSession exchange)
         certificates (get-certificate session)]
 
-    (array-map
-      :body (.getRequestBody exchange)
-      :request-method (get-request-method (.getRequestMethod exchange))
-      :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
-      :uri (.getPath uri)
-      :query-string (.getQuery uri)
-      :server-port port
-      :scheme :https
-      :protocol (.getProtocol exchange)
-      :remote-addr (.getHostString (.getRemoteAddress exchange))
-      :server-name host
-      :ssl-client-cert certificates)))
+    {:body            (.getRequestBody exchange)
+     :request-method  (get-request-method (.getRequestMethod exchange))
+     :headers         (get-request-headers (.entrySet (.getRequestHeaders exchange)))
+     :uri             (.getPath uri)
+     :query-string    (.getQuery uri)
+     :server-port     port
+     :scheme          :https
+     :protocol        (.getProtocol exchange)
+     :remote-addr     (.getHostString (.getRemoteAddress exchange))
+     :server-name     host
+     :ssl-client-cert certificates}))
 
 
 (defn- get-https-exchange-request-map [host port ^HttpsExchange exchange]
   (let [uri (.getRequestURI exchange)]
-    (array-map
-      :body (.getRequestBody exchange)
-      :request-method (get-request-method (.getRequestMethod exchange))
-      :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
-      :uri (.getPath uri)
-      :query-string (.getQuery uri)
-      :server-port port
-      :scheme :https
-      :protocol (.getProtocol exchange)
-      :remote-addr (.getHostString (.getRemoteAddress exchange))
-      :server-name host)))
+    {:body           (.getRequestBody exchange)
+     :request-method (get-request-method (.getRequestMethod exchange))
+     :headers        (get-request-headers (.entrySet (.getRequestHeaders exchange)))
+     :uri            (.getPath uri)
+     :query-string   (.getQuery uri)
+     :server-port    port
+     :scheme         :https
+     :protocol       (.getProtocol exchange)
+     :remote-addr    (.getHostString (.getRemoteAddress exchange))
+     :server-name    host}))
 
 
 (defn- get-http-exchange-request-map [host port ^HttpExchange exchange]
   (let [uri (.getRequestURI exchange)]
-    (array-map
-      :body (.getRequestBody exchange)
-      :request-method (get-request-method (.getRequestMethod exchange))
-      :headers (get-request-headers (.entrySet (.getRequestHeaders exchange)))
-      :uri (.getPath uri)
-      :query-string (.getQuery uri)
-      :server-port port
-      :scheme :http
-      :protocol (.getProtocol exchange)
-      :remote-addr (.getHostString (.getRemoteAddress exchange))
-      :server-name host)))
+    {:body           (.getRequestBody exchange)
+     :request-method (get-request-method (.getRequestMethod exchange))
+     :headers        (get-request-headers (.entrySet (.getRequestHeaders exchange)))
+     :uri            (.getPath uri)
+     :query-string   (.getQuery uri)
+     :server-port    port
+     :scheme         :http
+     :protocol       (.getProtocol exchange)
+     :remote-addr    (.getHostString (.getRemoteAddress exchange))
+     :server-name    host}))
 
 
 (defn- get-exchange-response [handler request-map]

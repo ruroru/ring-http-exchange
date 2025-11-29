@@ -84,7 +84,7 @@
   (let [server-response {:status  200
                          :headers {"Content-type" "text/html; charset=utf-8"}
                          :body    "hello world"}
-        server-config {:port 6443
+        server-config {:port        6443
                        :ssl-context (ssl/keystore->ssl-context default-key-manager default-password)}
         expected-response {:status  200
                            :headers {"Content-type" "text/html; charset=utf-8"}
