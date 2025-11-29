@@ -129,19 +129,19 @@
       (.transferTo ^FileInputStream in out))))
 
 (defn- send-file [^HttpExchange exchange response]
-  (set-response-headers (.getResponseHeaders exchange) (response :headers ))
-  (let [body ^File (response :body )
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
+  (let [body ^File (response :body)
         content-length (.length body)]
-    (.sendResponseHeaders exchange (response :status  200) content-length)
+    (.sendResponseHeaders exchange (response :status 200) content-length)
     (with-open [in ^InputStream (FileInputStream. body)
                 out ^OutputStream (.getResponseBody exchange)]
       (.transferTo ^FileInputStream in out))))
 
 
 (defn- send-input-stream [^HttpExchange exchange response]
-  (set-response-headers (.getResponseHeaders exchange) (response :headers ))
-  (.sendResponseHeaders exchange (response :status  200) 0)
-  (let [in ^InputStream (response :body )
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
+  (.sendResponseHeaders exchange (response :status 200) 0)
+  (let [in ^InputStream (response :body)
         out ^OutputStream (.getResponseBody exchange)]
     (.transferTo ^InputStream in out)
     (.close in)
@@ -160,11 +160,11 @@
 
 
 (defn- send-string [^HttpExchange exchange response]
-  (set-response-headers (.getResponseHeaders exchange) (response :headers ))
-  (let [body (response :body )
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
+  (let [body (response :body)
         bytes (.getBytes ^String body "UTF-8")
         content-length (alength bytes)]
-    (.sendResponseHeaders exchange (response :status  200) content-length)
+    (.sendResponseHeaders exchange (response :status 200) content-length)
     (let [out ^OutputStream (.getResponseBody exchange)]
       (.write out bytes)
       (.flush out)
@@ -183,10 +183,10 @@
 
 
 (defn- send-byte-array [^HttpExchange exchange response]
-  (set-response-headers (.getResponseHeaders exchange) (response :headers ))
-  (let [body (response :body )
+  (set-response-headers (.getResponseHeaders exchange) (response :headers))
+  (let [body (response :body)
         content-length (alength ^"[B" body)]
-    (.sendResponseHeaders exchange (response :status  200) content-length)
+    (.sendResponseHeaders exchange (response :status 200) content-length)
     (let [out ^OutputStream (.getResponseBody exchange)]
       (.write out ^"[B" body)
       (.flush out)
@@ -302,11 +302,11 @@
         (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
         (if get-ssl-client-cert?
           (if record-support?
-            (.createContext server index-route (HandlerWithClientCert. host port handler))
-            (.createContext server index-route (RecordHandlerWithClientCert. host port handler)))
+            (.createContext server index-route (RecordHandlerWithClientCert. host port handler))
+            (.createContext server index-route (HandlerWithClientCert. host port handler)))
           (if record-support?
-            (.createContext server index-route (HandlerWithoutClientCert. host port handler))
-            (.createContext server index-route (RecordHandlerWithoutClientCert. host port handler))))
+            (.createContext server index-route (RecordHandlerWithoutClientCert. host port handler))
+            (.createContext server index-route (HandlerWithoutClientCert. host port handler))))
         server)
       (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
         (if record-support?
