@@ -50,13 +50,13 @@ Add ring-http-exchange to dependency list
 
 ### Server configuration
 
-| Property          | Description                                  | Default value         |
-|-------------------|----------------------------------------------|-----------------------|
-| `host`            | Host name                                    | 0.0.0.0               | 
-| `port`            | Application port                             | 8080                  |
-| `executor`        | Executor to be used                          | ThreadPerTaskExecutor |
-| `ssl-context`     | Ssl context to be used in https configurator | nil                   |
-| `record-support?` | Can use records as a response                | false                 |
+| Property          | Description                                  | Default value            |
+|-------------------|----------------------------------------------|--------------------------|
+| `host`            | Host name                                    | 0.0.0.0                  | 
+| `port`            | Application port                             | 8080                     |
+| `executor`        | Executor to be used                          | newThreadPerTaskExecutor |
+| `ssl-context`     | Ssl context to be used in https configurator | nil                      |
+| `record-support?` | Can use records as a response                | true                     |
 
 ## Performance Tips
 

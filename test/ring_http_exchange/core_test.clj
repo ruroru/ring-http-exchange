@@ -330,6 +330,24 @@
                            expected-response))))))
 
 
+(deftest can-use-map-as-response-body-without-explicit-status-when-record-support-is-false
+  (let [response-bodies (list
+                          (CustomStreamableType.)
+                          "Hello world"
+                          (.getBytes "Hello world")
+                          (ByteArrayInputStream. (.getBytes "Hello world"))
+                          (File. (str (cwd) "/test/resources/helloworld")))]
+
+    (doseq [response-body response-bodies]
+      (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
+            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+                               :status  200
+                               :body    "Hello world"}]
+
+        (testing (format "testing %s" (type response-body))
+          (verify-response server-response {:record-support? false} expected-response))))))
+
+
 (deftest can-use-record-as-response
   (doseq [response-body (list
                           (CustomStreamableType.)
@@ -344,6 +362,24 @@
                              :body    "Hello world"}]
 
       (verify-response server-response {:record-support? true} expected-response))))
+
+
+(deftest can-use-map-as-response-body-without-explicit-status-when-record-support-is-true
+  (let [response-bodies (list
+                          (CustomStreamableType.)
+                          "Hello world"
+                          (.getBytes "Hello world")
+                          (ByteArrayInputStream. (.getBytes "Hello world"))
+                          (File. (str (cwd) "/test/resources/helloworld")))]
+
+    (doseq [response-body response-bodies]
+      (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
+            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+                               :status  200
+                               :body    "Hello world"}]
+
+        (testing (format "testing %s" (type response-body))
+          (verify-response server-response {:record-support? true} expected-response))))))
 
 (deftest can-restart-server
   (let [port 8083
