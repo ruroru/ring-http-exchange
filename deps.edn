@@ -1,4 +1,4 @@
-{:deps  {org.clojure/clojure                  {:mvn/version "1.12.3"}
+{:deps  {org.clojure/clojure                  {:mvn/version "1.12.4"}
          org.ring-clojure/ring-core-protocols {:mvn/version "1.15.3"}
          org.clojure/tools.logging            {:mvn/version "1.13.0"}}
  :paths ["src"]}
