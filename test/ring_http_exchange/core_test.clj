@@ -10,6 +10,7 @@
     [ring.core.protocols :as protocols])
   (:import (java.io ByteArrayInputStream File OutputStream)
            (java.util.concurrent Executors)
+           (org.apache.http NoHttpResponseException)
            (sun.net.httpserver FixedLengthInputStream)))
 
 
@@ -149,9 +150,9 @@
                          :headers {"Content-type" "text/html; charset=utf-8"}
                          :body    (File. (str (cwd) "/test/resources/not-existing"))}
 
-        expected-response {:status  500
+        expected-response {:status  404
                            :headers {"Content-type" "text/html"}
-                           :body    "Internal Server Error"}]
+                           :body    "File Not Found"}]
     (verify-response-with-default-status server-response expected-response)))
 
 (deftest can-use-byte-array-as-response-body
@@ -363,6 +364,34 @@
 
       (verify-response server-response {:record-support? true} expected-response))))
 
+(deftest cant-use-record-as-response-when-record-support-is-disabled
+  (doseq [response-body (list
+                          (CustomStreamableType.)
+                          "Hello world"
+                          (.getBytes "Hello world")
+                          (ByteArrayInputStream. (.getBytes "Hello world"))
+                          (File. (str (cwd) "/test/resources/helloworld")))]
+
+    (let [server-config {:record-support? false}
+          server-response (Response. response-body {"Content-type" "text/html; charset=utf-8"} 200)]
+
+      (let [server (server/run-http-server (fn [_]
+                                             server-response)
+                                           server-config)]
+        (try
+          (client/get (format "http%s://localhost:%s" (if (:ssl-context server-config)
+                                                        "s"
+                                                        "")
+                              (if (:port server-config)
+                                (:port server-config)
+                                8080))
+                      {:insecure?        true
+                       :throw-exceptions true})
+          (is (= -1 -2) " Should fail")
+          (catch Exception e
+            (is (instance? NoHttpResponseException e))))
+        (server/stop-http-server server)))))
+
 (deftest supports-utf8
   (let [response-bodies (list
                           "るまのせき"
@@ -376,7 +405,7 @@
                                :body    "るまのせき"}]
 
         (testing (format "testing %s" (type response-body))
-          (verify-response server-response {:record-support? true} expected-response))))))
+          (verify-response server-response expected-response))))))
 
 (deftest can-use-map-as-response-body-without-explicit-status-when-record-support-is-true
   (let [response-bodies (list

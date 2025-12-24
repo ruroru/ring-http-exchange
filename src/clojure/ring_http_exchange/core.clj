@@ -161,6 +161,13 @@
                {"Content-type" "text/html"}
                500))
 
+(defn- send-file-not-found [^HttpExchange exchange]
+  (send-string exchange
+               (.getResponseBody exchange)
+               "File Not Found"
+               {"Content-type" "text/html"}
+               404))
+
 (defn- if-not-file [exchange ^OutputStream out body headers status]
   (if (satisfies? protocols/StreamableResponseBody body)
     (maybe-streamable exchange out body headers status)
@@ -170,7 +177,7 @@
   (if (instance? File body)
     (if (.exists ^File body)
       (send-file exchange out body headers status)
-      (send-error exchange))
+      (send-file-not-found exchange))
     (if-not-file exchange out body headers status)))
 
 (defn- maybe-byte-array [exchange ^OutputStream out body headers status]
