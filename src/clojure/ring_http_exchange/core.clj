@@ -5,6 +5,7 @@
   (:import (com.sun.net.httpserver Headers HttpExchange HttpHandler HttpServer HttpsConfigurator HttpsExchange HttpsServer)
            (java.io File FileInputStream InputStream OutputStream)
            (java.net InetSocketAddress URI)
+           (java.nio.charset StandardCharsets)
            (java.security.cert X509Certificate)
            (java.util Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry List Map Set)
            (java.util.concurrent Executors)
@@ -133,19 +134,15 @@
 
     (.transferTo ^InputStream in out1)))
 
-(defn- send-string [^HttpExchange exchange ^OutputStream out ^String body headers status]
-  (with-open [out out]
-    (set-response-headers (.getResponseHeaders exchange) headers)
-    (.sendResponseHeaders exchange status (.length ^String body))
-
-    (.write out (.getBytes ^String body))))
-
 (defn- send-byte-array [^HttpExchange exchange ^OutputStream out body headers status]
   (with-open [out out]
     (set-response-headers (.getResponseHeaders exchange) headers)
     (.sendResponseHeaders exchange status (alength ^"[B" body))
 
     (.write out ^"[B" body)))
+
+(defn- send-string [^HttpExchange exchange ^OutputStream out ^String body headers status]
+  (send-byte-array  exchange  out (.getBytes ^String body StandardCharsets/UTF_8) headers status))
 
 (defn- maybe-streamable [^HttpExchange exchange ^OutputStream out body headers status]
   (with-open [out out]

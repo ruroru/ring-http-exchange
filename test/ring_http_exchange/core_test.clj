@@ -363,6 +363,20 @@
 
       (verify-response server-response {:record-support? true} expected-response))))
 
+(deftest supports-utf8
+  (let [response-bodies (list
+                          "るまのせき"
+                          (.getBytes "るまのせき")
+                          (ByteArrayInputStream. (.getBytes "るまのせき")))]
+
+    (doseq [response-body response-bodies]
+      (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
+            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+                               :status  200
+                               :body    "るまのせき"}]
+
+        (testing (format "testing %s" (type response-body))
+          (verify-response server-response {:record-support? true} expected-response))))))
 
 (deftest can-use-map-as-response-body-without-explicit-status-when-record-support-is-true
   (let [response-bodies (list
