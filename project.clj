@@ -1,4 +1,4 @@
-(defproject org.clojars.jj/ring-http-exchange "1.2.14-SNAPSHOT"
+(defproject org.clojars.jj/ring-http-exchange "1.2.14"
   :description "Ring adapter for com.sun.net.httpserver"
   :url "https://github.com/ruroru/ring-http-exchange"
   :license {:name "Eclipse Public License"
