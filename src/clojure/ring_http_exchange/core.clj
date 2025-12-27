@@ -123,7 +123,8 @@
     (set-response-headers (.getResponseHeaders exchange) headers)
     (.sendResponseHeaders exchange status (.length ^File body))
 
-    (.transferTo ^FileInputStream in out1)))
+    (.transferTo ^FileInputStream in out1)
+    (.flush ^OutputStream out1)))
 
 
 (defn- send-input-stream [^HttpExchange exchange ^OutputStream out body headers status]
@@ -132,17 +133,19 @@
     (set-response-headers (.getResponseHeaders exchange) headers)
     (.sendResponseHeaders exchange status 0)
 
-    (.transferTo ^InputStream in out1)))
+    (.transferTo ^InputStream in out1)
+    (.flush ^OutputStream out1)))
 
 (defn- send-byte-array [^HttpExchange exchange ^OutputStream out body headers status]
   (with-open [out out]
     (set-response-headers (.getResponseHeaders exchange) headers)
     (.sendResponseHeaders exchange status (alength ^"[B" body))
 
-    (.write out ^"[B" body)))
+    (.write out ^"[B" body)
+    (.flush ^OutputStream out)))
 
 (defn- send-string [^HttpExchange exchange ^OutputStream out ^String body headers status]
-  (send-byte-array  exchange  out (.getBytes ^String body StandardCharsets/UTF_8) headers status))
+  (send-byte-array exchange out (.getBytes ^String body StandardCharsets/UTF_8) headers status))
 
 (defn- maybe-streamable [^HttpExchange exchange ^OutputStream out body headers status]
   (with-open [out out]
