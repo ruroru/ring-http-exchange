@@ -265,7 +265,7 @@
 
 (deftest not-supported-body-returns-500-internal-server-error
   (let [server-response {:status  200
-                         :headers {"Content-type" "text/htm1l"}
+                         :headers {"Content-type" "text/html"}
                          :body    1}
 
         expected-response {:status  500
