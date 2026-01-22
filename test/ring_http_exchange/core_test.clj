@@ -157,11 +157,13 @@
 
 (deftest can-use-byte-array-as-response-body
   (let [server-response {:status  200
-                         :headers {"Content-type" "text/html; charset=utf-8"}
+                         :headers {"Content-type" "text/html; charset=utf-8"
+                                   "header1" "header-value"}
                          :body    (.getBytes "hello world")}
 
         expected-response {:status  200
-                           :headers {"Content-type" "text/html; charset=utf-8"}
+                           :headers {"Content-type" "text/html; charset=utf-8"
+                                     "header1" "header-value"}
                            :body    "hello world"}]
     (verify-response-with-default-status server-response expected-response)))
 

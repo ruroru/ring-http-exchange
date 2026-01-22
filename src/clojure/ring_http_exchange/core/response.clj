@@ -5,9 +5,12 @@
            (java.nio.charset StandardCharsets)))
 
 (defn- set-response-headers [^Headers response-headers resp-headers]
-  (doseq [[k v] resp-headers]
-    (.add response-headers (name k)
-          (if (string? v) v (str v)))))
+  (reduce-kv (fn [^Headers h k v]
+               (.add h
+                     (if (string? k) k (name k))
+                     (if (string? v) v (str v)))
+               h)
+             response-headers resp-headers))
 
 (defn- send-file [^HttpExchange exchange ^OutputStream out body headers status]
   (with-open [in ^InputStream (FileInputStream. ^File body)

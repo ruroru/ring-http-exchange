@@ -3,13 +3,13 @@
   (:import (com.sun.net.httpserver Headers HttpExchange HttpsExchange)
            (java.net URI)
            (java.security.cert X509Certificate)
-           (java.util Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry List Map Set)
+           (java.util List Map Map$Entry Set)
            (javax.net.ssl SSLSession)))
 
 (def ^:const ^:private comma ",")
 (def ^:private method-cache ^Map (Map/of
                                    "GET" :get
-                                   "POST" :post
+                                   "  POST" :post
                                    "PUT" :put
                                    "PATCH" :patch
                                    "DELETE" :delete
@@ -17,19 +17,23 @@
                                    "OPTIONS" :options
                                    "TRACE" :trace))
 
-(defn- get-header-value [^List header-list]
-  (if (= 1 (.size ^List header-list))
-    (.get header-list 0)
-    (String/join ^String comma header-list)))
-
-
-(defn- get-header-map [m ^Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry header]
-  (assoc! m (.getKey header) (get-header-value (.getValue header))))
 
 (defn- get-request-headers [^Set entry-set]
-  (persistent!
-    (reduce get-header-map (transient {})
-            entry-set)))
+  (let [arr (.toArray entry-set)
+        len (alength arr)]
+    (loop [m (transient {})
+           i 0]
+      (if (< i len)
+        (let [^Map$Entry map-entry (aget arr i)
+              ^List header-list (.getValue map-entry)
+              k (.getKey map-entry)
+              v (if (= 1 (.size header-list))
+                  (.get header-list 0)
+                  (String/join ^String comma header-list))]
+          (recur (assoc! m k v)
+                 (inc i)))
+        (persistent! m)))))
+
 
 (defn- convert-certificate [certificate] (cast X509Certificate certificate))
 
