@@ -31,7 +31,17 @@
           (.createContext server index-route (UnsecureRecordHandler. host port handler))
           (.createContext server index-route (UnsecureHandler. host port handler)))
         server))))
-
+(defn- set-httpserver-nodelay
+  []
+  (let [property-key (if (try
+                           (Class/forName "robaho.net.httpserver.ServerImpl")
+                           true
+                           (catch ClassNotFoundException _
+                             false))
+                       "robaho.net.httpserver.nodelay"
+                       "sun.net.httpserver.nodelay")]
+    (System/setProperty property-key "true")
+    property-key))
 
 (defn stop-http-server
   "Stops a com.sun.net.httpserver.HttpServer with an optional
@@ -68,6 +78,8 @@
                    backlog              (* 1024 8)
                    record-support?      true}
             }]
+  (set-httpserver-nodelay)
+
   (when (s/valid? ::port port)
     (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert? record-support?)]
       (try
