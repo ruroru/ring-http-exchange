@@ -47,6 +47,7 @@
      (is (= (:headers expected-responses)
             (->
               (:headers response)
+              (dissoc "Connection")
               (dissoc "Date")
               (dissoc "Content-length")
               (dissoc "Transfer-encoding"))))

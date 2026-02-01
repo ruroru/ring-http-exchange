@@ -13,7 +13,8 @@
                                     :username :env/clojars_user
                                     :password :env/clojars_pass}]]
 
-  :profiles {:test {:resource-paths ["test/resources"]
+  :profiles {:robaho {:dependencies [[io.github.robaho/httpserver "1.0.29"]]}
+             :test {:resource-paths ["test/resources"]
                     :source-paths   ["test/clojure"]
                     :dependencies   [[clj-http "3.13.1"]
                                      [org.bouncycastle/bcprov-jdk18on "1.83"]
