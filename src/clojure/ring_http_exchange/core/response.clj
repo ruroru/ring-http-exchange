@@ -19,7 +19,8 @@
     (.sendResponseHeaders exchange status (.length ^File body))
 
     (.transferTo ^FileInputStream in out1)
-    (.flush ^OutputStream out1)))
+    (.flush ^OutputStream out1))
+  (.close exchange))
 
 
 (defn- send-input-stream [^HttpExchange exchange ^OutputStream out body headers status]
@@ -29,7 +30,8 @@
     (.sendResponseHeaders exchange status 0)
 
     (.transferTo ^InputStream in out1)
-    (.flush ^OutputStream out1)))
+    (.flush ^OutputStream out1))
+  (.close exchange))
 
 (defn- send-byte-array [^HttpExchange exchange ^OutputStream out body headers status]
   (with-open [out out]
@@ -37,7 +39,8 @@
     (.sendResponseHeaders exchange status (alength ^"[B" body))
 
     (.write out ^"[B" body)
-    (.flush ^OutputStream out)))
+    (.flush ^OutputStream out))
+  (.close exchange))
 
 (defn- send-string [^HttpExchange exchange ^OutputStream out ^String body headers status]
   (send-byte-array exchange out (.getBytes ^String body StandardCharsets/UTF_8) headers status))
@@ -50,7 +53,8 @@
     (protocols/write-body-to-stream body {:body    body
                                           :status  status
                                           :headers headers}
-                                    out)))
+                                    out))
+  (.close exchange))
 
 
 (defn- send-error [^HttpExchange exchange]
@@ -103,3 +107,16 @@
   (if response
     (send-response exchange (.getResponseBody exchange) (:body response) (:headers response) (:status response 200))
     (send-error exchange)))
+
+(defn create-async-response [^HttpExchange exchange]
+  (fn [response]
+    (if response
+      (send-response exchange (.getResponseBody exchange) (response :body) (response :headers) (response :status 200))
+      (send-error exchange))))
+
+(defn create-async-record-response [^HttpExchange exchange]
+  (fn [response]
+    (if response
+      (send-response exchange (.getResponseBody exchange) (:body response) (:headers response) (:status response 200))
+      (send-error exchange))))
+

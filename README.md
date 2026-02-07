@@ -57,6 +57,7 @@ Add ring-http-exchange to dependency list
 | `executor`        | Executor to be used                          | newThreadPerTaskExecutor |
 | `ssl-context`     | Ssl context to be used in https configurator | nil                      |
 | `record-support?` | Can use records as a response                | true                     |
+| `async?`          | Add async ring support                       | false                    |
 
 ## Performance Tips
 

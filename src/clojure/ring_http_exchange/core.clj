@@ -1,36 +1,54 @@
 (ns ring-http-exchange.core
   (:require [clojure.spec.alpha :as s]
-            [ring_http_exchange.core.handler.http]
+            [ring_http_exchange.core.handler.http ]
             [ring_http_exchange.core.handler.https]
             [ring-http-exchange.core.handler.https-with-client-cert]
             [clojure.tools.logging :as logger])
   (:import (com.sun.net.httpserver HttpServer HttpsConfigurator HttpsServer)
            (java.net InetSocketAddress)
            (java.util.concurrent Executors)
-           (ring_http_exchange.core.handler.http UnsecureHandler UnsecureRecordHandler)
-           (ring_http_exchange.core.handler.https HandlerWithoutClientCert RecordHandlerWithoutClientCert)
-           (ring_http_exchange.core.handler.https_with_client_cert HandlerWithClientCert RecordHandlerWithClientCert)))
+           (ring_http_exchange.core.handler.http AsyncUnsecureRecordHandler UnsecureHandler AsyncUnsecureHandler UnsecureRecordHandler)
+           (ring_http_exchange.core.handler.https AsyncHandlerWithoutClientCert AsyncRecordHandlerWithoutClientCert HandlerWithoutClientCert RecordHandlerWithoutClientCert)
+           (ring_http_exchange.core.handler.https_with_client_cert AsyncHandlerWithClientCert AsyncRecordHandlerWithClientCert HandlerWithClientCert RecordHandlerWithClientCert)))
 
 (s/def ::port (s/int-in 1 65536))
 
-(defn- create-server [host port backlog handler ssl-context get-ssl-client-cert? record-support?]
+(defn- create-server [host port backlog handler ssl-context get-ssl-client-cert? record-support? async?]
   (let [index-route "/"]
-    (if ssl-context
-      (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-        (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-        (if get-ssl-client-cert?
+    (if async?
+      (if ssl-context
+        (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
+          (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+          (if get-ssl-client-cert?
+            (if record-support?
+              (.createContext server index-route (AsyncRecordHandlerWithClientCert. host port handler))
+              (.createContext server index-route (AsyncHandlerWithClientCert. host port handler)))
+            (if record-support?
+              (.createContext server index-route (AsyncRecordHandlerWithoutClientCert. host port handler))
+              (.createContext server index-route (AsyncHandlerWithoutClientCert. host port handler))))
+          server)
+        (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
           (if record-support?
-            (.createContext server index-route (RecordHandlerWithClientCert. host port handler))
-            (.createContext server index-route (HandlerWithClientCert. host port handler)))
+            (.createContext server index-route (AsyncUnsecureRecordHandler. host port handler))
+            (.createContext server index-route (AsyncUnsecureHandler. host port handler)))
+          server))
+      (if ssl-context
+        (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
+          (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
+          (if get-ssl-client-cert?
+            (if record-support?
+              (.createContext server index-route (RecordHandlerWithClientCert. host port handler))
+              (.createContext server index-route (HandlerWithClientCert. host port handler)))
+            (if record-support?
+              (.createContext server index-route (RecordHandlerWithoutClientCert. host port handler))
+              (.createContext server index-route (HandlerWithoutClientCert. host port handler))))
+          server)
+        (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
           (if record-support?
-            (.createContext server index-route (RecordHandlerWithoutClientCert. host port handler))
-            (.createContext server index-route (HandlerWithoutClientCert. host port handler))))
-        server)
-      (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-        (if record-support?
-          (.createContext server index-route (UnsecureRecordHandler. host port handler))
-          (.createContext server index-route (UnsecureHandler. host port handler)))
-        server))))
+            (.createContext server index-route (UnsecureRecordHandler. host port handler))
+            (.createContext server index-route (UnsecureHandler. host port handler)))
+          server)))))
+
 (defn- set-httpserver-nodelay
   []
   (let [property-key (if (try
@@ -61,7 +79,8 @@
   :executor             - executor to use in HttpServer, will default to ThreadPerTaskExecutor
   :get-ssl-client-cert? - a boolean value indicating whether retrieve client certs, will default to false.
   :backlog              - size of a backlog, defaults to 8192
-  :record-support?      - option to disable record support, defaults to true"
+  :record-support?      - option to disable record support, defaults to true
+  :async?               - Async-over-sync support, defaults to false"
 
   [handler {:keys [host
                    port
@@ -69,19 +88,21 @@
                    executor
                    get-ssl-client-cert?
                    backlog
-                   record-support?]
+                   record-support?
+                   async?]
             :or   {host                 "0.0.0.0"
                    port                 8080
                    ssl-context          nil
                    executor             (Executors/newVirtualThreadPerTaskExecutor)
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)
-                   record-support?      true}
+                   record-support?      true
+                   async?               false}
             }]
   (set-httpserver-nodelay)
 
   (when (s/valid? ::port port)
-    (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert? record-support?)]
+    (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert? record-support? async?)]
       (try
         (doto server
           (.setExecutor executor)
