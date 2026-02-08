@@ -17,9 +17,9 @@
     (.close output-stream)))
 
 
-(defn- verify-response
+(defn- verify-respond-response
   ([response expected-responses]
-   (verify-response response {} expected-responses))
+   (verify-respond-response response {} expected-responses))
   ([response server-config expected-responses]
    (let [server (server/run-http-server (fn [req res rej] (res response)) server-config)
          response (client/get (format "http%s://localhost:%s" (if (:ssl-context server-config)
@@ -41,6 +41,32 @@
               (dissoc "Transfer-encoding"))))
      (is (= (:body expected-responses) (:body response)))
      (server/stop-http-server server))))
+
+(defn- verify-raise-response
+  ([response expected-responses]
+   (verify-respond-response response {} expected-responses))
+  ([response server-config expected-responses]
+   (let [server (server/run-http-server (fn [req res rej] (rej response)) server-config)
+         response (client/get (format "http%s://localhost:%s" (if (:ssl-context server-config)
+                                                                "s"
+                                                                "")
+                                      (if (:port server-config)
+                                        (:port server-config)
+                                        8080))
+                              {:insecure?        true
+                               :throw-exceptions false})]
+
+     (is (= (:status expected-responses) (:status response)))
+     (is (= (:headers expected-responses)
+            (->
+              (:headers response)
+              (dissoc "Connection")
+              (dissoc "Date")
+              (dissoc "Content-length")
+              (dissoc "Transfer-encoding"))))
+     (is (= (:body expected-responses) (:body response)))
+     (server/stop-http-server server))))
+
 (defrecord Response [body status headers])
 
 
@@ -60,8 +86,27 @@
                                :body    "Hello world"}]
 
         (testing (format "testing %s" (type response-body))
-          (verify-response server-response {:async?          true
-                                            :record-support? false} expected-response))))))
+          (verify-respond-response server-response {:async?          true
+                                                    :record-support? false} expected-response))))))
+
+(deftest async-raise
+  (let [response-bodies (list
+                          (CustomStreamableType.)
+                          "Hello world"
+                          (.getBytes "Hello world")
+                          (ByteArrayInputStream. (.getBytes "Hello world"))
+                          (File. (str (cwd) "/test/resources/helloworld")))]
+
+    (doseq [response-body response-bodies]
+      (let [server-response {:body    response-body
+                             :headers {"Content-type" "text/html; charset=utf-8"}}
+            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+                               :status  200
+                               :body    "Hello world"}]
+
+        (testing (format "testing %s" (type response-body))
+          (verify-raise-response server-response {:async?          true
+                                                  :record-support? false} expected-response))))))
 
 (deftest async-record-support
   (let [response-bodies (list
@@ -81,8 +126,8 @@
                                :body    "Hello world"}]
 
         (testing (format "testing %s" (type response-body))
-          (verify-response server-response {:async?          true
-                                            :record-support? true} expected-response))))))
+          (verify-respond-response server-response {:async?          true
+                                                    :record-support? true} expected-response))))))
 
 (deftest can-survive-exceptions-in-handler
   (let [port 8083
