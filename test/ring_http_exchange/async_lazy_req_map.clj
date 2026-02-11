@@ -4,8 +4,7 @@
     [clojure.test :refer [deftest is testing]]
     [ring-http-exchange.core :as server]
     [ring.core.protocols :as protocols])
-  (:import (java.io ByteArrayInputStream File OutputStream)
-           (org.apache.http NoHttpResponseException)))
+  (:import (java.io ByteArrayInputStream File OutputStream)))
 
 
 (defn- cwd [] (System/getProperty "user.dir"))
@@ -140,3 +139,39 @@
           (verify-response server-response {:record-support?   true
                                             :async?            true
                                             :lazy-request-map? true} expected-response))))))
+
+
+(defn verify-request-map [server-config expected-request-map]
+  (let [
+        server (server/run-http-server (fn [req res rej]
+                                         (res {:status  200
+                                               :headers {}
+                                               :body    (str {:uri (:uri req)
+                                                              :server-port (:server-port req)
+                                                              :request-method (:request-method req)
+                                                              :query-string (:query-string req)
+                                                              :remote-addr (:remote-addr req)
+                                                              :scheme (:scheme req)
+                                                              :server-name (:server-name req)
+
+                                                              :protocol (:protocol req)})}))
+                                       server-config)
+        response (client/get (format "http://localhost:%s/" (:port server-config)))]
+    (is (= (:status response) 200))
+    (is (= (clojure.edn/read-string (:body response)) expected-request-map))
+    (server/stop-http-server server)))
+
+(deftest test-request-map-get-request
+  (let [server-config {:host "127.0.0.1"
+                       :port 8085
+                       :async?            true
+                       :lazy-request-map? true}
+        expected-request-map {:protocol       "HTTP/1.1"
+                              :query-string   nil
+                              :remote-addr    "127.0.0.1"
+                              :request-method :get
+                              :scheme         :http
+                              :server-name    "localhost:8085"
+                              :server-port    8085
+                              :uri            "/"}]
+    (verify-request-map server-config  expected-request-map)))

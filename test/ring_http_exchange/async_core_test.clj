@@ -100,9 +100,9 @@
     (doseq [response-body response-bodies]
       (let [server-response {:body    response-body
                              :headers {"Content-type" "text/html; charset=utf-8"}}
-            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
-                               :status  200
-                               :body    "Hello world"}]
+            expected-response {:headers {"Content-type" "text/html"}
+                               :status  500
+                               :body    "Internal Server Error"}]
 
         (testing (format "testing %s" (type response-body))
           (verify-raise-response server-response {:async?          true

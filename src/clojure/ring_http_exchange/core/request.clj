@@ -7,9 +7,9 @@
            (java.util List Map Map$Entry Set)
            (javax.net.ssl SSLSession)))
 
+(def ^:private get-method "GET")
 (def ^:const ^:private comma ",")
 (def ^:private method-cache ^Map (Map/of
-                                   "GET" :get
                                    "POST" :post
                                    "PUT" :put
                                    "PATCH" :patch
@@ -46,9 +46,14 @@
         (logger/warnf "Unable to parse certificate due to: %s" (.getMessage ^Throwable t)))
       (make-array X509Certificate 0))))
 
-(defn- ^:private get-request-method-val [^String method-string]
+(defn- get-method-or-default [ ^String method-string]
   (or (.get ^Map method-cache method-string)
-      (keyword (.toLowerCase method-string))))
+      (keyword (.toLowerCase ^String method-string))))
+
+(defn-  get-request-method-val [^String method-string]
+  (if (.equals ^String get-method method-string )
+    :get
+    (get-method-or-default method-string)))
 
 (defn- ^:private get-headers-map [^Headers headers]
   (get-request-headers (.entrySet headers)))
@@ -170,7 +175,6 @@
     (.valAt this k not-found)))
 
 (defn ->LazyHttpRequest [exchange]
-  (logger/error "lazy lazy req")
   (LazyHttpRequest. exchange))
 
 (defn ->LazyHttpsRequest [exchange]

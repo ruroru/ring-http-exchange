@@ -1,9 +1,7 @@
 (ns ring-http-exchange.core
   (:require [clojure.spec.alpha :as s]
-            [ring-http-exchange.core.handler.http :as http-handlers]
-            [ring-http-exchange.core.handler.https :as https-handlers]
-            [ring-http-exchange.core.handler.https-with-client-cert :as https-client-cert-handlers]
-            [clojure.tools.logging :as logger])
+            [clojure.tools.logging :as logger]
+            [ring-http-exchange.core.handler :as handler])
   (:import (com.sun.net.httpserver HttpServer HttpsConfigurator HttpsServer)
            (java.net InetSocketAddress)
            (java.util.concurrent Executors)))
@@ -21,22 +19,22 @@
 
     (let [handler-instance (cond
                              (and ssl-context get-ssl-client-cert? async?)
-                             (https-client-cert-handlers/->AsyncSecureHandlerWithClientCert host port handler record-support? lazy-request-map?)
+                             (handler/async-secure-handler-with-certs host port handler record-support? lazy-request-map?)
 
                              (and ssl-context get-ssl-client-cert?)
-                             (https-client-cert-handlers/->SecureHandlerWithClientCert host port handler record-support? lazy-request-map?)
+                             (handler/sync-secure-handler-with-certs host port handler record-support? lazy-request-map?)
 
                              (and ssl-context async?)
-                             (https-handlers/->AsyncSecureHandler host port handler record-support? lazy-request-map?)
+                             (handler/async-secure-handler host port handler record-support? lazy-request-map?)
 
                              ssl-context
-                             (https-handlers/->SecureHandler host port handler record-support? lazy-request-map?)
+                             (handler/sync-secure-handler host port handler record-support? lazy-request-map?)
 
                              async?
-                             (http-handlers/->AsyncUnsecureHandler host port handler record-support? lazy-request-map?)
+                             (handler/async-not-secure-handler host port handler record-support? lazy-request-map?)
 
                              :else
-                             (http-handlers/->UnsecureHandler host port handler record-support? lazy-request-map?))]
+                             (handler/sync-not-secure-handler host port handler record-support? lazy-request-map?))]
       (.createContext ^HttpServer server index-route handler-instance))
 
     server))
