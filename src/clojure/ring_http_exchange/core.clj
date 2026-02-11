@@ -10,41 +10,36 @@
 
 (s/def ::port (s/int-in 1 65536))
 
-(defn- create-server [host port backlog handler ssl-context get-ssl-client-cert? record-support? async?]
-  (let [index-route "/"]
-    (if async?
-      (if ssl-context
-        (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-          (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-          (if get-ssl-client-cert?
-            (if record-support?
-              (.createContext server index-route (https-client-cert-handlers/->AsyncRecordHandlerWithClientCert host port handler))
-              (.createContext server index-route (https-client-cert-handlers/->AsyncHandlerWithClientCert host port handler)))
-            (if record-support?
-              (.createContext server index-route (https-handlers/->AsyncRecordHandlerWithoutClientCert host port handler))
-              (.createContext server index-route (https-handlers/->AsyncHandlerWithoutClientCert host port handler))))
-          server)
-        (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-          (if record-support?
-            (.createContext server index-route (http-handlers/->AsyncUnsecureRecordHandler host port handler))
-            (.createContext server index-route (http-handlers/->AsyncUnsecureHandler host port handler)))
-          server))
-      (if ssl-context
-        (let [^HttpsServer server (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-          (.setHttpsConfigurator server (HttpsConfigurator. ssl-context))
-          (if get-ssl-client-cert?
-            (if record-support?
-              (.createContext server index-route (https-client-cert-handlers/->RecordHandlerWithClientCert host port handler))
-              (.createContext server index-route (https-client-cert-handlers/->HandlerWithClientCert host port handler)))
-            (if record-support?
-              (.createContext server index-route (https-handlers/->RecordHandlerWithoutClientCert host port handler))
-              (.createContext server index-route (https-handlers/->HandlerWithoutClientCert host port handler))))
-          server)
-        (let [server (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog))]
-          (if record-support?
-            (.createContext server index-route (http-handlers/->UnsecureRecordHandler host port handler))
-            (.createContext server index-route (http-handlers/->UnsecureHandler host port handler)))
-          server)))))
+(defn- create-server [host port backlog handler ssl-context get-ssl-client-cert? record-support? async? lazy-request-map?]
+  (let [index-route "/"
+        server (if ssl-context
+                 (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
+                 (HttpServer/create (InetSocketAddress. (str host) (int port)) (int backlog)))]
+
+    (when ssl-context
+      (.setHttpsConfigurator ^HttpsServer server (HttpsConfigurator. ssl-context)))
+
+    (let [handler-instance (cond
+                             (and ssl-context get-ssl-client-cert? async?)
+                             (https-client-cert-handlers/->AsyncSecureHandlerWithClientCert host port handler record-support? lazy-request-map?)
+
+                             (and ssl-context get-ssl-client-cert?)
+                             (https-client-cert-handlers/->SecureHandlerWithClientCert host port handler record-support? lazy-request-map?)
+
+                             (and ssl-context async?)
+                             (https-handlers/->AsyncSecureHandler host port handler record-support? lazy-request-map?)
+
+                             ssl-context
+                             (https-handlers/->SecureHandler host port handler record-support? lazy-request-map?)
+
+                             async?
+                             (http-handlers/->AsyncUnsecureHandler host port handler record-support? lazy-request-map?)
+
+                             :else
+                             (http-handlers/->UnsecureHandler host port handler record-support? lazy-request-map?))]
+      (.createContext ^HttpServer server index-route handler-instance))
+
+    server))
 
 (defn- set-httpserver-nodelay
   []
@@ -77,7 +72,9 @@
   :get-ssl-client-cert? - a boolean value indicating whether retrieve client certs, will default to false.
   :backlog              - size of a backlog, defaults to 8192
   :record-support?      - option to disable record support, defaults to true
-  :async?               - Async-over-sync support, defaults to false"
+  :async?               - Async-over-sync support, defaults to false
+  :lazy-request-map?    - Use lazy request map instead of eager, defaults to false
+  "
 
   [handler {:keys [host
                    port
@@ -86,7 +83,8 @@
                    get-ssl-client-cert?
                    backlog
                    record-support?
-                   async?]
+                   async?
+                   lazy-request-map?]
             :or   {host                 "0.0.0.0"
                    port                 8080
                    ssl-context          nil
@@ -94,12 +92,13 @@
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)
                    record-support?      true
-                   async?               false}
+                   async?               false
+                   lazy-request-map?    false}
             }]
   (set-httpserver-nodelay)
 
   (when (s/valid? ::port port)
-    (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert? record-support? async?)]
+    (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert? record-support? async? lazy-request-map?)]
       (try
         (doto server
           (.setExecutor executor)

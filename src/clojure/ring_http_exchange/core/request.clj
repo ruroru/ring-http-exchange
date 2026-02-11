@@ -1,6 +1,7 @@
 (ns ^:no-doc ring-http-exchange.core.request
   (:require [clojure.tools.logging :as logger])
-  (:import (com.sun.net.httpserver Headers HttpExchange HttpsExchange)
+  (:import (clojure.lang IFn ILookup)
+           (com.sun.net.httpserver Headers HttpExchange HttpsExchange)
            (java.net URI)
            (java.security.cert X509Certificate)
            (java.util List Map Map$Entry Set)
@@ -9,7 +10,7 @@
 (def ^:const ^:private comma ",")
 (def ^:private method-cache ^Map (Map/of
                                    "GET" :get
-                                   "  POST" :post
+                                   "POST" :post
                                    "PUT" :put
                                    "PATCH" :patch
                                    "DELETE" :delete
@@ -90,3 +91,91 @@
    :protocol       (.getProtocol exchange)
    :remote-addr    (.getHostString (.getRemoteAddress exchange))
    :server-name    host})
+
+(deftype LazyHttpRequest [^HttpExchange exchange]
+  ILookup
+  (valAt [this k]
+    (.valAt this k nil))
+  (valAt [this k not-found]
+    (case k
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method-val (.getRequestMethod exchange))
+      :headers (get-headers-map (.getRequestHeaders exchange))
+      :uri (.getPath ^URI (.getRequestURI exchange))
+      :query-string (.getQuery ^URI (.getRequestURI exchange))
+      :server-port (.getPort (.getLocalAddress exchange))
+      :scheme :http
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name (or (.getFirst (.getRequestHeaders exchange) "Host")
+                       (.getHostString (.getLocalAddress exchange)))
+      not-found))
+
+  IFn
+  (invoke [this k]
+    (.valAt this k))
+  (invoke [this k not-found]
+    (.valAt this k not-found)))
+
+(deftype LazyHttpsRequest [^HttpsExchange exchange]
+  ILookup
+  (valAt [this k]
+    (.valAt this k nil))
+  (valAt [this k not-found]
+    (case k
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method-val (.getRequestMethod exchange))
+      :headers (get-headers-map (.getRequestHeaders exchange))
+      :uri (.getPath ^URI (.getRequestURI exchange))
+      :query-string (.getQuery ^URI (.getRequestURI exchange))
+      :server-port (.getPort (.getLocalAddress exchange))
+      :scheme :https
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name (or (.getFirst (.getRequestHeaders exchange) "Host")
+                       (.getHostString (.getLocalAddress exchange)))
+      not-found))
+
+  IFn
+  (invoke [this k]
+    (.valAt this k))
+  (invoke [this k not-found]
+    (.valAt this k not-found)))
+
+
+(deftype LazyHttpsClientCertRequest [^HttpsExchange exchange]
+  ILookup
+  (valAt [this k]
+    (.valAt this k nil))
+  (valAt [this k not-found]
+    (case k
+      :body (.getRequestBody exchange)
+      :request-method (get-request-method-val (.getRequestMethod exchange))
+      :headers (get-headers-map (.getRequestHeaders exchange))
+      :uri (.getPath ^URI (.getRequestURI exchange))
+      :query-string (.getQuery ^URI (.getRequestURI exchange))
+      :server-port (.getPort (.getLocalAddress exchange))
+      :scheme :https
+      :protocol (.getProtocol exchange)
+      :remote-addr (.getHostString (.getRemoteAddress exchange))
+      :server-name (or (.getFirst (.getRequestHeaders exchange) "Host")
+                       (.getHostString (.getLocalAddress exchange)))
+      :ssl-client-cert (get-certificate ^SSLSession (.getSSLSession exchange))
+      not-found))
+
+  IFn
+  (invoke [this k]
+    (.valAt this k))
+  (invoke [this k not-found]
+    (.valAt this k not-found)))
+
+(defn ->LazyHttpRequest [exchange]
+  (logger/error "lazy lazy req")
+  (LazyHttpRequest. exchange))
+
+(defn ->LazyHttpsRequest [exchange]
+  (LazyHttpsRequest. exchange))
+
+(defn ->LazyHttpsClientCertRequest [exchange]
+  (LazyHttpsClientCertRequest. exchange))
+

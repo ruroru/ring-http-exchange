@@ -50,14 +50,15 @@ Add ring-http-exchange to dependency list
 
 ### Server configuration
 
-| Property          | Description                                  | Default value            |
-|-------------------|----------------------------------------------|--------------------------|
-| `host`            | Host name                                    | 0.0.0.0                  | 
-| `port`            | Application port                             | 8080                     |
-| `executor`        | Executor to be used                          | newThreadPerTaskExecutor |
-| `ssl-context`     | Ssl context to be used in https configurator | nil                      |
-| `record-support?` | Can use records as a response                | true                     |
-| `async?`          | Add async ring support                       | false                    |
+| Property            | Description                                  | Default value            |
+|---------------------|----------------------------------------------|--------------------------|
+| `host`              | Host name                                    | 0.0.0.0                  | 
+| `port`              | Application port                             | 8080                     |
+| `executor`          | Executor to be used                          | newThreadPerTaskExecutor |
+| `ssl-context`       | Ssl context to be used in https configurator | nil                      |
+| `record-support?`   | Can use records as a response                | true                     |
+| `async?`            | Add async ring support                       | false                    |
+| `lazy-request-map?` | Create request map that is evaluated lazily  | false                    |
 
 ## Performance Tips
 

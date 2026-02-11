@@ -1,54 +1,43 @@
 (ns ^:no-doc ring-http-exchange.core.handler.http
-  (:require [ring-http-exchange.core.request :as request]
+  (:require [clojure.tools.logging :as logger]
+            [ring-http-exchange.core.request :as request]
             [ring-http-exchange.core.response :as response]
             [ring-http-exchange.core.ring-handler :as handler])
   (:import (com.sun.net.httpserver HttpHandler)))
 
-(deftype UnsecureHandler [host port handler]
+(deftype SyncHandler [host port handler response-fn request-map-fn create-response-fn]
   HttpHandler
   (handle [_ exchange]
-    (response/send-exchange-response
-      exchange
-      (handler/get-exchange-response
-        handler
-        (request/get-http-exchange-request-map host port exchange)))))
+    (response-fn exchange (create-response-fn handler (request-map-fn host port exchange)))))
 
-(deftype UnsecureRecordHandler [host port handler]
+(deftype LazyReqSyncHandler [host port handler response-fn create-response-fn]
   HttpHandler
   (handle [_ exchange]
-    (response/send-record-exchange-response
-      exchange
-      (handler/get-exchange-response
-        handler
-        (request/get-http-exchange-request-map host port exchange)))))
+    (response-fn exchange (create-response-fn handler (request/->LazyHttpRequest exchange)))))
 
-(deftype AsyncUnsecureHandler [host port handler]
+(deftype AsyncHandler [host port handler request-map-fn create-response-fn]
   HttpHandler
   (handle [_ exchange]
-    (handler/get-async-exchange-response
-      handler (request/get-http-exchange-request-map host port exchange)
-      (response/create-async-response exchange))))
+    (handler/get-async-exchange-response handler (request-map-fn host port exchange) (create-response-fn exchange))))
 
-(deftype AsyncUnsecureRecordHandler [host port handler]
+(deftype LazyReqAsyncHandler [host port handler create-response-fn]
   HttpHandler
   (handle [_ exchange]
-    (handler/get-async-exchange-response
-      handler (request/get-http-exchange-request-map host port exchange)
-      (response/create-async-record-response exchange))))
+    (handler/get-async-exchange-response handler (request/->LazyHttpRequest exchange) (create-response-fn exchange))))
 
 (defn ->UnsecureHandler
-  [host port handler]
-  (UnsecureHandler. host port handler))
-
-(defn ->UnsecureRecordHandler
-  [host port handler]
-  (UnsecureRecordHandler. host port handler))
+  [host port handler record-support? lazy-request-map?]
+  (case [record-support? lazy-request-map?]
+    [true true] (LazyReqSyncHandler. host port handler response/send-record-exchange-response handler/get-exchange-response)
+    [true false] (SyncHandler. host port handler response/send-record-exchange-response request/get-http-exchange-request-map handler/get-exchange-response)
+    [false true] (LazyReqSyncHandler. host port handler response/send-exchange-response handler/get-exchange-response)
+    [false false] (SyncHandler. host port handler response/send-exchange-response request/get-http-exchange-request-map handler/get-exchange-response)))
 
 (defn ->AsyncUnsecureHandler
-  [host port handler]
-  (AsyncUnsecureHandler. host port handler))
-
-(defn ->AsyncUnsecureRecordHandler
-  [host port handler]
-  (AsyncUnsecureRecordHandler. host port handler))
-
+  [host port handler record-support? lazy-request-map?]
+  (logger/error [record-support? lazy-request-map?])
+  (case [record-support? lazy-request-map?]
+    [true true] (LazyReqAsyncHandler. host port handler response/create-async-record-response)
+    [true false] (AsyncHandler. host port handler request/get-http-exchange-request-map response/create-async-record-response)
+    [false true] (LazyReqAsyncHandler. host port handler response/create-async-response)
+    [false false] (AsyncHandler. host port handler request/get-http-exchange-request-map response/create-async-response)))
