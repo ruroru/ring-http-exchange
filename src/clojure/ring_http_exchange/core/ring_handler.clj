@@ -1,6 +1,7 @@
 (ns ^:no-doc ring-http-exchange.core.ring-handler
   (:require [clojure.tools.logging :as logger])
-  (:import (clojure.lang IFn)))
+  (:import (clojure.lang IFn)
+           (java.util.concurrent CountDownLatch)))
 
 
 (def ^:private ^:const error-response {:status  500
@@ -21,7 +22,14 @@
 
 
 (defn get-async-exchange-response [handler request-map res]
-  (let [raise (Raiser. res)]
-    (try (handler request-map res raise)
+  (let [latch (CountDownLatch. 1)
+        res-wrapper (fn [response]
+                      (try
+                        (res response)
+                        (finally
+                          (.countDown latch))))
+        raise (Raiser. res-wrapper)]
+    (try (handler request-map res-wrapper raise)
          (catch Throwable t
-           (raise t)))))
+           (raise t)))
+    (.await latch)))
