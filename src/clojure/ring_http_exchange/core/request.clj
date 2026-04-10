@@ -192,7 +192,7 @@
 
 (defn ->LazyHttpRequest [^HttpExchange exchange]
   (build-lazy-map
-    {:body           (delay (.getRequestBody exchange))
+    {:body           (.getRequestBody exchange)
      :request-method (delay (get-request-method-val (.getRequestMethod exchange)))
      :headers        (delay (get-headers-map (.getRequestHeaders exchange)))
      :uri            (delay (.getPath ^URI (.getRequestURI exchange)))
@@ -206,7 +206,7 @@
 
 (defn ->LazyHttpsRequest [^HttpsExchange exchange]
   (build-lazy-map
-    {:body           (delay (.getRequestBody exchange))
+    {:body           (.getRequestBody exchange)
      :request-method (delay (get-request-method-val (.getRequestMethod exchange)))
      :headers        (delay (get-headers-map (.getRequestHeaders exchange)))
      :uri            (delay (.getPath ^URI (.getRequestURI exchange)))
@@ -220,7 +220,7 @@
 
 (defn ->LazyHttpsClientCertRequest [^HttpsExchange exchange]
   (build-lazy-map
-    {:body             (delay (.getRequestBody exchange))
+    {:body             (.getRequestBody exchange)
      :request-method   (delay (get-request-method-val (.getRequestMethod exchange)))
      :headers          (delay (get-headers-map (.getRequestHeaders exchange)))
      :uri              (delay (.getPath ^URI (.getRequestURI exchange)))
