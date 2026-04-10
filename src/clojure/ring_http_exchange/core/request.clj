@@ -1,10 +1,12 @@
 (ns ^:no-doc ring-http-exchange.core.request
   (:require [clojure.tools.logging :as logger])
-  (:import (clojure.lang IFn ILookup)
+  (:import (clojure.lang Associative Counted IFn IHashEq ILookup IMapEntry
+                         IObj IPersistentCollection IPersistentMap MapEntry
+                         Seqable)
            (com.sun.net.httpserver Headers HttpExchange HttpsExchange)
            (java.net URI)
            (java.security.cert X509Certificate)
-           (java.util List Map Map$Entry Set)
+           (java.util Iterator List Map Map$Entry Set)
            (javax.net.ssl SSLSession)))
 
 (def ^:private get-method "GET")
@@ -97,89 +99,137 @@
    :remote-addr    (.getHostString (.getRemoteAddress exchange))
    :server-name    host})
 
-(deftype LazyHttpRequest [^HttpExchange exchange]
+(defn- force-val [v]
+  (if (delay? v) @v v))
+
+(defn- force-and-cache! [^IPersistentMap m k raw]
+  (if (delay? raw)
+    (let [v @raw
+          updated (.assoc m k v)]
+      [updated v])
+    [m raw]))
+
+(deftype LazyMap [^:volatile-mutable ^IPersistentMap delay-map _meta]
+  IPersistentMap
+  (assoc [_ k v]
+    (LazyMap. (.assoc delay-map k v) _meta))
+  (assocEx [_ k v]
+    (LazyMap. (.assocEx delay-map k v) _meta))
+  (without [_ k]
+    (LazyMap. (.without delay-map k) _meta))
+
+  IPersistentCollection
+  (count [_] (.count delay-map))
+  (cons [_ o]
+    (LazyMap. (.cons delay-map o) _meta))
+  (empty [_] (LazyMap. (.empty delay-map) _meta))
+  (equiv [_ o]
+    (if (instance? LazyMap o)
+      (.equiv delay-map (.-delay-map ^LazyMap o))
+      (and (map? o)
+           (= (count o) (.count delay-map))
+           (every? (fn [^IMapEntry e]
+                     (let [k (.key e)]
+                       (and (contains? o k)
+                            (= (force-val (.val e)) (get o k)))))
+                   (.seq delay-map)))))
+
+  Associative
+  (containsKey [_ k] (.containsKey delay-map k))
+  (entryAt [_ k]
+    (when-let [^IMapEntry e (.entryAt delay-map k)]
+      (let [[m v] (force-and-cache! delay-map (.key e) (.val e))]
+        (set! delay-map m)
+        (MapEntry/create (.key e) v))))
+
   ILookup
-  (valAt [this k]
-    (.valAt this k nil))
-  (valAt [this k not-found]
-    (case k
-      :body (.getRequestBody exchange)
-      :request-method (get-request-method-val (.getRequestMethod exchange))
-      :headers (get-headers-map (.getRequestHeaders exchange))
-      :uri (.getPath ^URI (.getRequestURI exchange))
-      :query-string (.getQuery ^URI (.getRequestURI exchange))
-      :server-port (.getPort (.getLocalAddress exchange))
-      :scheme :http
-      :protocol (.getProtocol exchange)
-      :remote-addr (.getHostString (.getRemoteAddress exchange))
-      :server-name (or (.getFirst (.getRequestHeaders exchange) "Host")
-                       (.getHostString (.getLocalAddress exchange)))
+  (valAt [_ k]
+    (let [raw (.valAt delay-map k)]
+      (let [[m v] (force-and-cache! delay-map k raw)]
+        (set! delay-map m)
+        v)))
+  (valAt [_ k not-found]
+    (if (.containsKey delay-map k)
+      (let [raw (.valAt delay-map k)
+            [m v] (force-and-cache! delay-map k raw)]
+        (set! delay-map m)
+        v)
       not-found))
 
-  IFn
-  (invoke [this k]
-    (.valAt this k))
-  (invoke [this k not-found]
-    (.valAt this k not-found)))
+  Seqable
+  (seq [_]
+    (when-let [s (.seq delay-map)]
+      (map (fn [^IMapEntry e]
+             (MapEntry/create (.key e) (force-val (.val e))))
+           s)))
 
-(deftype LazyHttpsRequest [^HttpsExchange exchange]
-  ILookup
-  (valAt [this k]
-    (.valAt this k nil))
-  (valAt [this k not-found]
-    (case k
-      :body (.getRequestBody exchange)
-      :request-method (get-request-method-val (.getRequestMethod exchange))
-      :headers (get-headers-map (.getRequestHeaders exchange))
-      :uri (.getPath ^URI (.getRequestURI exchange))
-      :query-string (.getQuery ^URI (.getRequestURI exchange))
-      :server-port (.getPort (.getLocalAddress exchange))
-      :scheme :https
-      :protocol (.getProtocol exchange)
-      :remote-addr (.getHostString (.getRemoteAddress exchange))
-      :server-name (or (.getFirst (.getRequestHeaders exchange) "Host")
-                       (.getHostString (.getLocalAddress exchange)))
-      not-found))
+  Counted
 
   IFn
-  (invoke [this k]
-    (.valAt this k))
-  (invoke [this k not-found]
-    (.valAt this k not-found)))
+  (invoke [this k] (.valAt this k))
+  (invoke [this k not-found] (.valAt this k not-found))
 
+  IObj
+  (meta [_] _meta)
+  (withMeta [_ m] (LazyMap. delay-map m))
 
-(deftype LazyHttpsClientCertRequest [^HttpsExchange exchange]
-  ILookup
-  (valAt [this k]
-    (.valAt this k nil))
-  (valAt [this k not-found]
-    (case k
-      :body (.getRequestBody exchange)
-      :request-method (get-request-method-val (.getRequestMethod exchange))
-      :headers (get-headers-map (.getRequestHeaders exchange))
-      :uri (.getPath ^URI (.getRequestURI exchange))
-      :query-string (.getQuery ^URI (.getRequestURI exchange))
-      :server-port (.getPort (.getLocalAddress exchange))
-      :scheme :https
-      :protocol (.getProtocol exchange)
-      :remote-addr (.getHostString (.getRemoteAddress exchange))
-      :server-name (or (.getFirst (.getRequestHeaders exchange) "Host")
-                       (.getHostString (.getLocalAddress exchange)))
-      :ssl-client-cert (get-certificate ^SSLSession (.getSSLSession exchange))
-      not-found))
+  IHashEq
+  (hasheq [this]
+    (hash (into {} this)))
 
-  IFn
-  (invoke [this k]
-    (.valAt this k))
-  (invoke [this k not-found]
-    (.valAt this k not-found)))
+  Iterable
+  (iterator [this]
+    (let [s (atom (.seq this))]
+      (reify Iterator
+        (hasNext [_] (boolean (seq @s)))
+        (next [_]
+          (let [e (first @s)]
+            (swap! s rest)
+            e))))))
 
-(defn ->LazyHttpRequest [exchange]
-  (LazyHttpRequest. exchange))
+(defn- build-lazy-map [m]
+  (LazyMap. m nil))
 
-(defn ->LazyHttpsRequest [exchange]
-  (LazyHttpsRequest. exchange))
+(defn ->LazyHttpRequest [^HttpExchange exchange]
+  (build-lazy-map
+    {:body           (delay (.getRequestBody exchange))
+     :request-method (delay (get-request-method-val (.getRequestMethod exchange)))
+     :headers        (delay (get-headers-map (.getRequestHeaders exchange)))
+     :uri            (delay (.getPath ^URI (.getRequestURI exchange)))
+     :query-string   (delay (.getQuery ^URI (.getRequestURI exchange)))
+     :server-port    (delay (.getPort (.getLocalAddress exchange)))
+     :scheme         :http
+     :protocol       (delay (.getProtocol exchange))
+     :remote-addr    (delay (.getHostString (.getRemoteAddress exchange)))
+     :server-name    (delay (or (.getFirst (.getRequestHeaders exchange) "Host")
+                                (.getHostString (.getLocalAddress exchange))))}))
 
-(defn ->LazyHttpsClientCertRequest [exchange]
-  (LazyHttpsClientCertRequest. exchange))
+(defn ->LazyHttpsRequest [^HttpsExchange exchange]
+  (build-lazy-map
+    {:body           (delay (.getRequestBody exchange))
+     :request-method (delay (get-request-method-val (.getRequestMethod exchange)))
+     :headers        (delay (get-headers-map (.getRequestHeaders exchange)))
+     :uri            (delay (.getPath ^URI (.getRequestURI exchange)))
+     :query-string   (delay (.getQuery ^URI (.getRequestURI exchange)))
+     :server-port    (delay (.getPort (.getLocalAddress exchange)))
+     :scheme         :https
+     :protocol       (delay (.getProtocol exchange))
+     :remote-addr    (delay (.getHostString (.getRemoteAddress exchange)))
+     :server-name    (delay (or (.getFirst (.getRequestHeaders exchange) "Host")
+                                (.getHostString (.getLocalAddress exchange))))}))
+
+(defn ->LazyHttpsClientCertRequest [^HttpsExchange exchange]
+  (build-lazy-map
+    {:body             (delay (.getRequestBody exchange))
+     :request-method   (delay (get-request-method-val (.getRequestMethod exchange)))
+     :headers          (delay (get-headers-map (.getRequestHeaders exchange)))
+     :uri              (delay (.getPath ^URI (.getRequestURI exchange)))
+     :query-string     (delay (.getQuery ^URI (.getRequestURI exchange)))
+     :server-port      (delay (.getPort (.getLocalAddress exchange)))
+     :scheme           :https
+     :protocol         (delay (.getProtocol exchange))
+     :remote-addr      (delay (.getHostString (.getRemoteAddress exchange)))
+     :server-name      (delay (or (.getFirst (.getRequestHeaders exchange) "Host")
+                                  (.getHostString (.getLocalAddress exchange))))
+     :ssl-client-cert  (delay (get-certificate ^SSLSession (.getSSLSession exchange)))}))
 
