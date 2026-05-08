@@ -9,7 +9,7 @@
            (java.util Iterator List Map Map$Entry Set)
            (javax.net.ssl SSLSession)))
 
-(def ^:private get-method "GET")
+(def ^:private get-method-str "GET")
 (def ^:const ^:private comma ",")
 (def ^:private method-cache ^Map (Map/of
                                    "POST" :post
@@ -53,7 +53,7 @@
       (keyword (.toLowerCase ^String method-string))))
 
 (defn-  get-request-method-val [^String method-string]
-  (if (.equals ^String get-method method-string )
+  (if (.equals ^String get-method-str method-string)
     :get
     (get-method-or-default method-string)))
 

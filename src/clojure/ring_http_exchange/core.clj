@@ -8,7 +8,7 @@
 
 (s/def ::port (s/int-in 1 65536))
 
-(defn- create-server [host port backlog handler ssl-context get-ssl-client-cert? record-support? async? lazy-request-map?]
+(defn- create-server [host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async? lazy-request-map?]
   (let [index-route "/"
         server (if ssl-context
                  (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
@@ -19,19 +19,19 @@
 
     (let [handler-instance (cond
                              (and ssl-context get-ssl-client-cert? async?)
-                             (handler/async-secure-handler-with-certs host port handler record-support? lazy-request-map?)
+                             (handler/async-secure-handler-with-certs host port handler executor record-support? lazy-request-map?)
 
                              (and ssl-context get-ssl-client-cert?)
                              (handler/sync-secure-handler-with-certs host port handler record-support? lazy-request-map?)
 
                              (and ssl-context async?)
-                             (handler/async-secure-handler host port handler record-support? lazy-request-map?)
+                             (handler/async-secure-handler host port handler executor record-support? lazy-request-map?)
 
                              ssl-context
                              (handler/sync-secure-handler host port handler record-support? lazy-request-map?)
 
                              async?
-                             (handler/async-not-secure-handler host port handler record-support? lazy-request-map?)
+                             (handler/async-not-secure-handler host port handler executor record-support? lazy-request-map?)
 
                              :else
                              (handler/sync-not-secure-handler host port handler record-support? lazy-request-map?))]
@@ -96,11 +96,15 @@
   (set-httpserver-nodelay)
 
   (when (s/valid? ::port port)
-    (let [^HttpServer server (create-server host port backlog handler ssl-context get-ssl-client-cert? record-support? async? lazy-request-map?)]
+    (let [^HttpServer server (create-server host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async? lazy-request-map?)]
       (try
-        (doto server
-          (.setExecutor executor)
-          (.start))
+        (if async?
+          (doto server
+            (.setExecutor (Executors/newVirtualThreadPerTaskExecutor))
+            (.start))
+          (doto server
+            (.setExecutor executor)
+            (.start)))
         (catch Throwable t
           (logger/error (.getMessage t))
           (throw t))))))
