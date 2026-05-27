@@ -8,7 +8,7 @@
 
 (s/def ::port (s/int-in 1 65536))
 
-(defn- create-server [host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async?]
+(defn- create-server [host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async? request-map-fields]
   (let [index-route "/"
         server (if ssl-context
                  (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
@@ -19,22 +19,22 @@
 
     (let [handler-instance (cond
                              (and ssl-context get-ssl-client-cert? async?)
-                             (handler/async-secure-handler-with-certs host port handler executor record-support?)
+                             (handler/async-secure-handler-with-certs host port handler executor record-support? request-map-fields)
 
                              (and ssl-context get-ssl-client-cert?)
-                             (handler/sync-secure-handler-with-certs host port handler record-support?)
+                             (handler/sync-secure-handler-with-certs host port handler record-support? request-map-fields)
 
                              (and ssl-context async?)
-                             (handler/async-secure-handler host port handler executor record-support?)
+                             (handler/async-secure-handler host port handler executor record-support? request-map-fields)
 
                              ssl-context
-                             (handler/sync-secure-handler host port handler record-support?)
+                             (handler/sync-secure-handler host port handler record-support? request-map-fields)
 
                              async?
-                             (handler/async-not-secure-handler host port handler executor record-support?)
+                             (handler/async-not-secure-handler host port handler executor record-support? request-map-fields)
 
                              :else
-                             (handler/sync-not-secure-handler host port handler record-support?))]
+                             (handler/sync-not-secure-handler host port handler record-support? request-map-fields))]
       (.createContext ^HttpServer server index-route handler-instance))
 
     server))
@@ -76,6 +76,7 @@
   :backlog              - size of a backlog, defaults to 8192
   :record-support?      - option to disable record support, defaults to true
   :async?               - Async-over-sync support, defaults to false
+  :request-map-fields   - set of keys to include in request map (e.g. #{:body :headers :uri}), defaults to nil (all fields)
   "
 
   [handler {:keys [host
@@ -85,7 +86,8 @@
                    get-ssl-client-cert?
                    backlog
                    record-support?
-                   async?]
+                   async?
+                   request-map-fields]
             :or   {host                 "0.0.0.0"
                    port                 8080
                    ssl-context          nil
@@ -93,14 +95,15 @@
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)
                    record-support?      true
-                   async?               false}
+                   async?               false
+                   request-map-fields   nil}
             }]
   (set-httpserver-nodelay)
 
   (when (s/valid? ::port port)
     (let [async-executor (if (virtual-thread-per-task? executor) nil executor)
 
-          ^HttpServer server (create-server host port backlog handler async-executor ssl-context get-ssl-client-cert? record-support? async?)]
+          ^HttpServer server (create-server host port backlog handler async-executor ssl-context get-ssl-client-cert? record-support? async? request-map-fields)]
       (try
         (if async?
           (doto server

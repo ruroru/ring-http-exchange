@@ -19,38 +19,50 @@
       (request-map-fn host port exchange)
       (create-response-fn exchange))))
 
+(defn- filter-request-map-fn [request-map-fn request-map-fields]
+  (if request-map-fields
+    (fn [host port exchange]
+      (select-keys (request-map-fn host port exchange) request-map-fields))
+    request-map-fn))
+
 (defn sync-not-secure-handler
-  [host port handler record-support?]
-  (if record-support?
-    (SyncHandler. host port handler response/send-record-exchange-response handler/get-exchange-response request/get-http-exchange-request-map)
-    (SyncHandler. host port handler response/send-exchange-response handler/get-exchange-response request/get-http-exchange-request-map)))
+  [host port handler record-support? request-map-fields]
+  (let [req-fn (filter-request-map-fn request/get-http-exchange-request-map request-map-fields)]
+    (if record-support?
+      (SyncHandler. host port handler response/send-record-exchange-response handler/get-exchange-response req-fn)
+      (SyncHandler. host port handler response/send-exchange-response handler/get-exchange-response req-fn))))
 
 (defn async-not-secure-handler
-  [host port handler executor record-support?]
-  (if record-support?
-    (AsyncHandler. host port handler executor response/create-async-record-response request/get-http-exchange-request-map)
-    (AsyncHandler. host port handler executor response/create-async-response request/get-http-exchange-request-map)))
+  [host port handler executor record-support? request-map-fields]
+  (let [req-fn (filter-request-map-fn request/get-http-exchange-request-map request-map-fields)]
+    (if record-support?
+      (AsyncHandler. host port handler executor response/create-async-record-response req-fn)
+      (AsyncHandler. host port handler executor response/create-async-response req-fn))))
 
 (defn sync-secure-handler
-  [host port handler record-support?]
-  (if record-support?
-    (SyncHandler. host port handler response/send-record-exchange-response handler/get-exchange-response request/get-https-exchange-request-map)
-    (SyncHandler. host port handler response/send-exchange-response handler/get-exchange-response request/get-https-exchange-request-map)))
+  [host port handler record-support? request-map-fields]
+  (let [req-fn (filter-request-map-fn request/get-https-exchange-request-map request-map-fields)]
+    (if record-support?
+      (SyncHandler. host port handler response/send-record-exchange-response handler/get-exchange-response req-fn)
+      (SyncHandler. host port handler response/send-exchange-response handler/get-exchange-response req-fn))))
 
 (defn async-secure-handler
-  [host port handler executor record-support?]
-  (if record-support?
-    (AsyncHandler. host port handler executor response/create-async-record-response request/get-https-exchange-request-map)
-    (AsyncHandler. host port handler executor response/create-async-response request/get-https-exchange-request-map)))
+  [host port handler executor record-support? request-map-fields]
+  (let [req-fn (filter-request-map-fn request/get-https-exchange-request-map request-map-fields)]
+    (if record-support?
+      (AsyncHandler. host port handler executor response/create-async-record-response req-fn)
+      (AsyncHandler. host port handler executor response/create-async-response req-fn))))
 
 (defn sync-secure-handler-with-certs
-  [host port handler record-support?]
-  (if record-support?
-    (SyncHandler. host port handler response/send-record-exchange-response handler/get-exchange-response request/get-https-client-cert-exchange-request-map)
-    (SyncHandler. host port handler response/send-exchange-response handler/get-exchange-response request/get-https-client-cert-exchange-request-map)))
+  [host port handler record-support? request-map-fields]
+  (let [req-fn (filter-request-map-fn request/get-https-client-cert-exchange-request-map request-map-fields)]
+    (if record-support?
+      (SyncHandler. host port handler response/send-record-exchange-response handler/get-exchange-response req-fn)
+      (SyncHandler. host port handler response/send-exchange-response handler/get-exchange-response req-fn))))
 
 (defn async-secure-handler-with-certs
-  [host port handler executor record-support?]
-  (if record-support?
-    (AsyncHandler. host port handler executor response/create-async-record-response request/get-https-client-cert-exchange-request-map)
-    (AsyncHandler. host port handler executor response/create-async-response request/get-https-client-cert-exchange-request-map)))
+  [host port handler executor record-support? request-map-fields]
+  (let [req-fn (filter-request-map-fn request/get-https-client-cert-exchange-request-map request-map-fields)]
+    (if record-support?
+      (AsyncHandler. host port handler executor response/create-async-record-response req-fn)
+      (AsyncHandler. host port handler executor response/create-async-response req-fn))))
