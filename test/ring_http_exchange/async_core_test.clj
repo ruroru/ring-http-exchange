@@ -149,3 +149,25 @@
     (is (= 200 (:status response2)))
     (is (= "hello world" (:body response2)))
     (server/stop-http-server server)))
+
+(deftest can-survive-exceptions-in-handler-in-cached-threadpool
+  (let [port 8083
+        server (server/run-http-server (fn [req res rej]
+                                         (if (= (:uri req) "/error")
+                                           (throw (Exception. "Internal exception"))
+                                           (res {:status  200
+                                                 :headers {}
+                                                 :body    "hello world"})))
+
+                                       {:executor (Executors/newCachedThreadPool)
+                                        :async?   true
+                                        :port     port})
+        response1 (client/get (format "http://localhost:%s/error" port)
+                              {:throw-exceptions false})
+        response2 (client/get (format "http://localhost:%s/" port))]
+    (is (= 500 (:status response1)))
+    (is (= "Internal Server Error" (:body response1)))
+    (is (= 200 (:status response2)))
+    (is (= "hello world" (:body response2)))
+    (server/stop-http-server server)))
+

@@ -8,7 +8,7 @@
 
 (s/def ::port (s/int-in 1 65536))
 
-(defn- create-server [host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async? lazy-request-map?]
+(defn- create-server [host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async?]
   (let [index-route "/"
         server (if ssl-context
                  (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
@@ -19,22 +19,22 @@
 
     (let [handler-instance (cond
                              (and ssl-context get-ssl-client-cert? async?)
-                             (handler/async-secure-handler-with-certs host port handler executor record-support? lazy-request-map?)
+                             (handler/async-secure-handler-with-certs host port handler executor record-support?)
 
                              (and ssl-context get-ssl-client-cert?)
-                             (handler/sync-secure-handler-with-certs host port handler record-support? lazy-request-map?)
+                             (handler/sync-secure-handler-with-certs host port handler record-support?)
 
                              (and ssl-context async?)
-                             (handler/async-secure-handler host port handler executor record-support? lazy-request-map?)
+                             (handler/async-secure-handler host port handler executor record-support?)
 
                              ssl-context
-                             (handler/sync-secure-handler host port handler record-support? lazy-request-map?)
+                             (handler/sync-secure-handler host port handler record-support?)
 
                              async?
-                             (handler/async-not-secure-handler host port handler executor record-support? lazy-request-map?)
+                             (handler/async-not-secure-handler host port handler executor record-support?)
 
                              :else
-                             (handler/sync-not-secure-handler host port handler record-support? lazy-request-map?))]
+                             (handler/sync-not-secure-handler host port handler record-support?))]
       (.createContext ^HttpServer server index-route handler-instance))
 
     server))
@@ -59,6 +59,11 @@
   ([^HttpServer server delay]
    (doto server (.stop delay))))
 
+(defn- virtual-thread-per-task? [executor]
+  (and executor
+       (= "java.util.concurrent.ThreadPerTaskExecutor"
+          (.getName (class executor)))))
+
 (defn run-http-server
   "Start a com.sun.net.httpserver.HttpServer to serve the given
   handler according to the supplied options:
@@ -71,7 +76,6 @@
   :backlog              - size of a backlog, defaults to 8192
   :record-support?      - option to disable record support, defaults to true
   :async?               - Async-over-sync support, defaults to false
-  :lazy-request-map?    - Use lazy request map instead of eager, defaults to false
   "
 
   [handler {:keys [host
@@ -81,8 +85,7 @@
                    get-ssl-client-cert?
                    backlog
                    record-support?
-                   async?
-                   lazy-request-map?]
+                   async?]
             :or   {host                 "0.0.0.0"
                    port                 8080
                    ssl-context          nil
@@ -90,13 +93,14 @@
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)
                    record-support?      true
-                   async?               false
-                   lazy-request-map?    false}
+                   async?               false}
             }]
   (set-httpserver-nodelay)
 
   (when (s/valid? ::port port)
-    (let [^HttpServer server (create-server host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async? lazy-request-map?)]
+    (let [async-executor (if (virtual-thread-per-task? executor) nil executor)
+
+          ^HttpServer server (create-server host port backlog handler async-executor ssl-context get-ssl-client-cert? record-support? async?)]
       (try
         (if async?
           (doto server

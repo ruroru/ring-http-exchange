@@ -13,18 +13,20 @@
          (logger/error (.getMessage ^Throwable t))
          error-response)))
 
-
-(defn get-async-exchange-response [handler executor request-map res-fn]
-  (let [cf (CompletableFuture.)]
-    (.execute ^Executor executor
-              (fn []
+(defn get-async-exchange-response
+  ([handler executor request-map res-fn]
+   (let [cf   (CompletableFuture.)
+         work (fn []
                 (try
                   (handler request-map
                            (fn [res] (.complete cf res))
-                           (fn [_] (.complete cf :error)))
+                           (fn [_]   (.complete cf :error)))
                   (catch Throwable _
-                    (.complete cf :error)))))
-    (let [result (.get cf)]
-      (if (= result :error)
-        (res-fn error-response)
-        (res-fn result)))))
+                    (.complete cf :error))))]
+     (if executor
+       (.execute ^Executor executor ^Runnable work)
+       (work))
+     (let [result (.get cf)]
+       (if (= result :error)
+         (res-fn error-response)
+         (res-fn result))))))
