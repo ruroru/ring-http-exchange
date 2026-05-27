@@ -20,23 +20,6 @@
     (server/stop-http-server server)
     (set ks)))
 
-(defn- request-map-content
-  "Starts a server with the given config, makes a GET request, and returns
-   the request map (without :body and User-agent header)."
-  [server-config]
-  (let [server (server/run-http-server
-                 (fn [req]
-                   {:status  200
-                    :headers {}
-                    :body    (str (assoc
-                                   (dissoc req :body)
-                                   :headers (dissoc (:headers req) "User-agent")))})
-                 server-config)
-        response (client/get (format "http://localhost:%s/" (:port server-config)))
-        result (edn/read-string (:body response))]
-    (server/stop-http-server server)
-    result))
-
 (def ^:private all-fields
   #{:body :request-method :headers :uri :query-string
     :server-port :scheme :protocol :remote-addr :server-name})

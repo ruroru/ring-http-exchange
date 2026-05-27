@@ -22,7 +22,7 @@
 (defn- filter-request-map-fn [request-map-fn request-map-fields]
   (if request-map-fields
     (fn [host port exchange]
-      (select-keys (request-map-fn host port exchange) request-map-fields))
+      (request-map-fn host port exchange request-map-fields))
     request-map-fn))
 
 (defn sync-not-secure-handler
