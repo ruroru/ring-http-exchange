@@ -8,6 +8,18 @@
 
 (s/def ::port (s/int-in 1 65536))
 
+
+(def ^:private valid-request-map-fields
+     #{:body :request-method :headers :uri :query-string :server-port :scheme :protocol :remote-addr :server-name :ssl-client-cert})
+  
+(defn- validate-request-map-fields [fields]
+  (when fields
+    (let [invalid (remove valid-request-map-fields fields)]
+      (when (seq invalid)
+        (throw (ex-info (str "Invalid request-map-fields: " (vec invalid)
+                        ". Valid fields are: " valid-request-map-fields)
+                        {:invalid-fields (set invalid) :valid-fields valid-request-map-fields}))))))
+
 (defn- create-server [host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async? request-map-fields]
   (let [index-route "/"
         server (if ssl-context
@@ -99,6 +111,7 @@
                    request-map-fields   nil}
             }]
   (set-httpserver-nodelay)
+  (validate-request-map-fields request-map-fields)
 
   (when (s/valid? ::port port)
     (let [async-executor (if (virtual-thread-per-task? executor) nil executor)

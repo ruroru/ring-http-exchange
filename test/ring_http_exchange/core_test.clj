@@ -443,3 +443,13 @@
       (client/get (format "http://localhost:%s/" port))
       (is (= 200 (:status response-after-restart)))
       (server/stop-http-server new-server))))
+
+
+(deftest invalid-request-map-fields-throws
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Invalid request-map-fields"
+                        (server/run-http-server
+                          (fn [_] {:status 200 :headers {} :body ""})
+                          {:port               8086
+                           :request-map-fields #{:invalid-field}}))))
+
