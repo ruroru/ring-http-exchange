@@ -453,3 +453,38 @@
                           {:port               8086
                            :request-map-fields #{:invalid-field}}))))
 
+(deftest invalid-handler-mode-throws
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Invalid handler-mode"
+                        (server/run-http-server
+                          (fn [_] {:status 200 :headers {} :body ""})
+                          {:port         8086
+                           :handler-mode :invalid}))))
+
+(deftest async?-backward-compat
+  (let [server (server/run-http-server
+                 (fn [_req respond _raise]
+                   (respond {:status  200
+                             :headers {}
+                             :body    "async-compat"}))
+                 {:port   8086
+                  :async? true})
+        response (client/get "http://localhost:8086/")]
+    (is (= 200 (:status response)))
+    (is (= "async-compat" (:body response)))
+    (server/stop-http-server server)))
+
+(deftest handler-mode-takes-precedence-over-async?
+  (let [server (server/run-http-server
+                 (fn [_req]
+                   {:status  200
+                    :headers {}
+                    :body    "sync-wins"})
+                 {:port         8086
+                  :async?       true
+                  :handler-mode :sync})
+        response (client/get "http://localhost:8086/")]
+    (is (= 200 (:status response)))
+    (is (= "sync-wins" (:body response)))
+    (server/stop-http-server server)))
+

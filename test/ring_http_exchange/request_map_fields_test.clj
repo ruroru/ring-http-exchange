@@ -76,7 +76,7 @@
                              :headers {}
                              :body    (str (keys req))}))
                  {:port               8086
-                  :async?             true
+                  :handler-mode       :async
                   :request-map-fields fields})
         response (client/get "http://localhost:8086/")
         ks (set (edn/read-string (:body response)))]

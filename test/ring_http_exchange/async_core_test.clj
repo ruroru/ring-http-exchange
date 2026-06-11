@@ -86,7 +86,7 @@
                                :body    "Hello world"}]
 
         (testing (format "testing %s" (type response-body))
-          (verify-respond-response server-response {:async?          true
+          (verify-respond-response server-response {:handler-mode    :async
                                                     :record-support? false} expected-response))))))
 
 (deftest async-raise
@@ -105,7 +105,7 @@
                                :body    "Internal Server Error"}]
 
         (testing (format "testing %s" (type response-body))
-          (verify-raise-response server-response {:async?          true
+          (verify-raise-response server-response {:handler-mode    :async
                                                   :record-support? false} expected-response))))))
 
 (deftest async-record-support
@@ -126,7 +126,7 @@
                                :body    "Hello world"}]
 
         (testing (format "testing %s" (type response-body))
-          (verify-respond-response server-response {:async?          true
+          (verify-respond-response server-response {:handler-mode    :async
                                                     :record-support? true} expected-response))))))
 
 (deftest can-survive-exceptions-in-handler
@@ -139,7 +139,7 @@
                                                  :body    "hello world"})))
 
                                        {:executor (Executors/newVirtualThreadPerTaskExecutor)
-                                        :async?   true
+                                        :handler-mode :async
                                         :port     port})
         response1 (client/get (format "http://localhost:%s/error" port)
                               {:throw-exceptions false})
@@ -160,7 +160,7 @@
                                                  :body    "hello world"})))
 
                                        {:executor (Executors/newCachedThreadPool)
-                                        :async?   true
+                                        :handler-mode :async
                                         :port     port})
         response1 (client/get (format "http://localhost:%s/error" port)
                               {:throw-exceptions false})

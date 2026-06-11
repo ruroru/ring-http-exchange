@@ -38,6 +38,21 @@ Add ring-http-exchange to dependency list
    :executor (Executors/newVirtualThreadPerTaskExecutor)})
 ```
 
+### CompletableFuture handler
+
+``` clojure
+(import '(java.util.concurrent CompletableFuture))
+
+(server/run-http-server
+  (fn [req]
+    (CompletableFuture/completedFuture
+      {:status 200
+       :headers {"Content-Type" "text/html; charset=utf-8"}
+       :body "hello world"}))
+  {:port 8080
+   :handler-mode :future})
+```
+
 ### Supported response body types
 
 | Response Body Type                           | 
@@ -50,26 +65,17 @@ Add ring-http-exchange to dependency list
 
 ### Server configuration
 
-| Property            | Description                                  | Default value            |
-|---------------------|----------------------------------------------|--------------------------|
-| `host`              | Host name                                    | 0.0.0.0                  | 
-| `port`              | Application port                             | 8080                     |
-| `executor`          | Executor to be used                          | newThreadPerTaskExecutor |
-| `ssl-context`       | Ssl context to be used in https configurator | nil                      |
-| `record-support?`   | Can use records as a response                | true                     |
-| `async?`            | Add async ring support                       | false                    |
-| `request-map-fields`| Set of keys to include in request map        | nil (all fields)         |
+| Property             | Description                                                    | Default value            |
+|----------------------|----------------------------------------------------------------|--------------------------|
+| `host`               | Host name                                                      | 0.0.0.0                  | 
+| `port`               | Application port                                               | 8080                     |
+| `executor`           | Executor to be used                                            | newThreadPerTaskExecutor |
+| `ssl-context`        | Ssl context to be used in https configurator                   | nil                      |
+| `record-support?`    | Can use records as a response                                  | true                     |
+| `handler-mode`       | `:sync`, `:async` (callback), or `:future` (CompletableFuture) | :sync                    |
+| `request-map-fields` | Set of keys to include in request map                          | nil (all fields)         |
 
 ## Performance Tips
-
-### Executor
-
-To increase performance you can pick executor depending on the use case
-
-| Use case   | Executor                                                                         |
-|------------|----------------------------------------------------------------------------------|
-| Throughput | `Executors/newVirtualThreadPerTaskExecutor`                                      |
-| Latency    | [NioEventLoopGroup](https://mvnrepository.com/artifact/io.netty/netty-transport) |
 
 ### Robaho httpserver
 

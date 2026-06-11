@@ -20,7 +20,9 @@
                         ". Valid fields are: " valid-request-map-fields)
                         {:invalid-fields (set invalid) :valid-fields valid-request-map-fields}))))))
 
-(defn- create-server [host port backlog handler executor ssl-context get-ssl-client-cert? record-support? async? request-map-fields]
+(def ^:private valid-handler-modes #{:sync :async :future})
+
+(defn- create-server [host port backlog handler executor ssl-context get-ssl-client-cert? record-support? handler-mode request-map-fields]
   (let [index-route "/"
         server (if ssl-context
                  (HttpsServer/create (InetSocketAddress. (str host) (int port)) (int backlog))
@@ -30,20 +32,29 @@
       (.setHttpsConfigurator ^HttpsServer server (HttpsConfigurator. ssl-context)))
 
     (let [handler-instance (cond
-                             (and ssl-context get-ssl-client-cert? async?)
+                             (and ssl-context get-ssl-client-cert? (= handler-mode :async))
                              (handler/async-secure-handler-with-certs host port handler executor record-support? request-map-fields)
+
+                             (and ssl-context get-ssl-client-cert? (= handler-mode :future))
+                             (handler/future-secure-handler-with-certs host port handler record-support? request-map-fields)
 
                              (and ssl-context get-ssl-client-cert?)
                              (handler/sync-secure-handler-with-certs host port handler record-support? request-map-fields)
 
-                             (and ssl-context async?)
+                             (and ssl-context (= handler-mode :async))
                              (handler/async-secure-handler host port handler executor record-support? request-map-fields)
+
+                             (and ssl-context (= handler-mode :future))
+                             (handler/future-secure-handler host port handler record-support? request-map-fields)
 
                              ssl-context
                              (handler/sync-secure-handler host port handler record-support? request-map-fields)
 
-                             async?
+                             (= handler-mode :async)
                              (handler/async-not-secure-handler host port handler executor record-support? request-map-fields)
+
+                             (= handler-mode :future)
+                             (handler/future-not-secure-handler host port handler record-support? request-map-fields)
 
                              :else
                              (handler/sync-not-secure-handler host port handler record-support? request-map-fields))]
@@ -87,7 +98,7 @@
   :get-ssl-client-cert? - a boolean value indicating whether retrieve client certs, will default to false.
   :backlog              - size of a backlog, defaults to 8192
   :record-support?      - option to disable record support, defaults to true
-  :async?               - Async-over-sync support, defaults to false
+  :handler-mode         - :sync (default), :async (callback), or :future (CompletableFuture)
   :request-map-fields   - set of keys to include in request map (e.g. #{:body :headers :uri}), defaults to nil (all fields)
   "
 
@@ -98,6 +109,7 @@
                    get-ssl-client-cert?
                    backlog
                    record-support?
+                   handler-mode
                    async?
                    request-map-fields]
             :or   {host                 "0.0.0.0"
@@ -107,18 +119,24 @@
                    get-ssl-client-cert? false
                    backlog              (* 1024 8)
                    record-support?      true
+                   handler-mode         nil
                    async?               false
                    request-map-fields   nil}
             }]
+  (let [handler-mode (or handler-mode
+                         (cond async? :async
+                               :else  :sync))]
   (set-httpserver-nodelay)
   (validate-request-map-fields request-map-fields)
+  (when-not (valid-handler-modes handler-mode)
+    (throw (ex-info (str "Invalid handler-mode: " handler-mode ". Valid modes are: " valid-handler-modes)
+                    {:handler-mode handler-mode :valid-modes valid-handler-modes})))
 
   (when (s/valid? ::port port)
     (let [async-executor (if (virtual-thread-per-task? executor) nil executor)
-
-          ^HttpServer server (create-server host port backlog handler async-executor ssl-context get-ssl-client-cert? record-support? async? request-map-fields)]
+          ^HttpServer server (create-server host port backlog handler async-executor ssl-context get-ssl-client-cert? record-support? handler-mode request-map-fields)]
       (try
-        (if async?
+        (if (= handler-mode :async)
           (doto server
             (.setExecutor (Executors/newVirtualThreadPerTaskExecutor))
             (.start))
@@ -127,7 +145,7 @@
             (.start)))
         (catch Throwable t
           (logger/error (.getMessage t))
-          (throw t))))))
+          (throw t)))))))
 
 (defn restart-http-server
   "restarts HttpServer with an optional delay (in seconds) to allow active request to finish."

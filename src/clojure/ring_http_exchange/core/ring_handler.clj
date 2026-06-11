@@ -30,3 +30,14 @@
        (if (= result :error)
          (res-fn error-response)
          (res-fn result))))))
+
+(defn get-future-exchange-response [handler request-map res-fn]
+  (try
+    (let [^CompletableFuture cf (handler request-map)
+          result (.get cf)]
+      (if result
+        (res-fn result)
+        (res-fn error-response)))
+    (catch Throwable t
+      (logger/error (.getMessage ^Throwable t))
+      (res-fn error-response))))
