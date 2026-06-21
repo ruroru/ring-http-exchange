@@ -72,6 +72,19 @@
                            :body    ""}]
     (verify-response server-response server-config expected-response)))
 
+(deftest head-request-with-nil-body
+  (let [port 8082
+        server (server/run-http-server (fn [_]
+                                         {:status  200
+                                          :headers {"Content-type" "text/html; charset=utf-8"}
+                                          :body    nil})
+                                       {:port port})
+        response (client/head (format "http://localhost:%s/" port)
+                              {:throw-exceptions false})]
+    (is (= 200 (:status response)))
+    (is (nil? (:body response)))
+    (server/stop-http-server server)))
+
 (deftest can-override-http-port
   (let [server-response {:status  200
                          :headers {"Content-type" "text/html; charset=utf-8"}

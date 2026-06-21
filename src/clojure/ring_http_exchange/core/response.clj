@@ -93,10 +93,17 @@
     (send-input-stream exchange out body headers status)
     (maybe-byte-array exchange out body headers status)))
 
+(defn- send-nil-body [^HttpExchange exchange headers status]
+  (set-response-headers (.getResponseHeaders exchange) headers)
+  (.sendResponseHeaders exchange status -1)
+  (.close exchange))
+
 (defn- send-response [exchange out body headers status]
-  (if (instance? String body)
-    (send-string exchange out body headers status)
-    (maybe-inputs-stream exchange out body headers status)))
+  (if (nil? body)
+    (send-nil-body exchange headers status)
+    (if (instance? String body)
+      (send-string exchange out body headers status)
+      (maybe-inputs-stream exchange out body headers status))))
 
 (defn send-exchange-response [^HttpExchange exchange response]
   (if response
