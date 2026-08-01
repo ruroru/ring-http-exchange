@@ -10,6 +10,7 @@
 (def ^:const ^:private comma ",")
 (def ^:private method-cache ^Map (Map/of
                                    "POST" :post
+                                   "QUERY" :query
                                    "PUT" :put
                                    "PATCH" :patch
                                    "DELETE" :delete
