@@ -16,7 +16,7 @@
   :profiles {:robaho {:dependencies [[io.github.robaho/httpserver "1.0.29"]]}
              :test {:resource-paths ["test/resources"]
                     :source-paths   ["test/clojure"]
-                    :dependencies   [[clj-http "3.13.1"]
+                    :dependencies   [[org.clojars.jj/potoroo "0.1.0-SNAPSHOT"]
                                      [org.bouncycastle/bcprov-jdk18on "1.85.2"]
                                      [org.bouncycastle/bcpkix-jdk18on "1.85"]
                                      [mock-clj "0.2.1"]]}}

@@ -1,8 +1,9 @@
 (ns ring-http-exchange.async-core-test
-  (:require [clj-http.client :as client]
-            [clojure.test :refer :all]
+  (:require [clojure.test :refer :all]
+            [jj.potoroo.httpclient :as client]
             [ring.core.protocols :as protocols]
-            [ring-http-exchange.core :as server])
+            [ring-http-exchange.core :as server]
+            [ring-http-exchange.test-client :as test-client])
   (:import (java.io ByteArrayInputStream File OutputStream)
            (java.util.concurrent Executors)))
 
@@ -28,17 +29,18 @@
                                       (if (:port server-config)
                                         (:port server-config)
                                         8080))
-                              {:insecure?        true
-                               :throw-exceptions false})]
+                              {:client (if (:ssl-context server-config)
+                                         test-client/insecure-client
+                                         test-client/client)})]
 
      (is (= (:status expected-responses) (:status response)))
      (is (= (:headers expected-responses)
             (->
               (:headers response)
-              (dissoc "Connection")
-              (dissoc "Date")
-              (dissoc "Content-length")
-              (dissoc "Transfer-encoding"))))
+              (dissoc "connection")
+              (dissoc "date")
+              (dissoc "content-length")
+              (dissoc "transfer-encoding"))))
      (is (= (:body expected-responses) (:body response)))
      (server/stop-http-server server))))
 
@@ -53,17 +55,18 @@
                                       (if (:port server-config)
                                         (:port server-config)
                                         8080))
-                              {:insecure?        true
-                               :throw-exceptions false})]
+                              {:client (if (:ssl-context server-config)
+                                         test-client/insecure-client
+                                         test-client/client)})]
 
      (is (= (:status expected-responses) (:status response)))
      (is (= (:headers expected-responses)
             (->
               (:headers response)
-              (dissoc "Connection")
-              (dissoc "Date")
-              (dissoc "Content-length")
-              (dissoc "Transfer-encoding"))))
+              (dissoc "connection")
+              (dissoc "date")
+              (dissoc "content-length")
+              (dissoc "transfer-encoding"))))
      (is (= (:body expected-responses) (:body response)))
      (server/stop-http-server server))))
 
@@ -81,7 +84,7 @@
     (doseq [response-body response-bodies]
       (let [server-response {:body    response-body
                              :headers {"Content-type" "text/html; charset=utf-8"}}
-            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+            expected-response {:headers {"content-type" "text/html; charset=utf-8"}
                                :status  200
                                :body    "Hello world"}]
 
@@ -100,7 +103,7 @@
     (doseq [response-body response-bodies]
       (let [server-response {:body    response-body
                              :headers {"Content-type" "text/html; charset=utf-8"}}
-            expected-response {:headers {"Content-type" "text/html"}
+            expected-response {:headers {"content-type" "text/html"}
                                :status  500
                                :body    "Internal Server Error"}]
 
@@ -121,7 +124,7 @@
                               response-body
                               200
                               {"Content-type" "text/html; charset=utf-8"})
-            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+            expected-response {:headers {"content-type" "text/html; charset=utf-8"}
                                :status  200
                                :body    "Hello world"}]
 
@@ -142,8 +145,9 @@
                                         :handler-mode :async
                                         :port     port})
         response1 (client/get (format "http://localhost:%s/error" port)
-                              {:throw-exceptions false})
-        response2 (client/get (format "http://localhost:%s/" port))]
+                              {:client test-client/client})
+        response2 (client/get (format "http://localhost:%s/" port)
+                              {:client test-client/client})]
     (is (= 500 (:status response1)))
     (is (= "Internal Server Error" (:body response1)))
     (is (= 200 (:status response2)))
@@ -163,8 +167,9 @@
                                         :handler-mode :async
                                         :port     port})
         response1 (client/get (format "http://localhost:%s/error" port)
-                              {:throw-exceptions false})
-        response2 (client/get (format "http://localhost:%s/" port))]
+                              {:client test-client/client})
+        response2 (client/get (format "http://localhost:%s/" port)
+                              {:client test-client/client})]
     (is (= 500 (:status response1)))
     (is (= "Internal Server Error" (:body response1)))
     (is (= 200 (:status response2)))

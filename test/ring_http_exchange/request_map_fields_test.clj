@@ -1,9 +1,10 @@
 (ns ring-http-exchange.request-map-fields-test
   (:require
-    [clj-http.client :as client]
     [clojure.edn :as edn]
     [clojure.test :refer [deftest is testing]]
-    [ring-http-exchange.core :as server]))
+    [jj.potoroo.httpclient :as client]
+    [ring-http-exchange.core :as server]
+    [ring-http-exchange.test-client :as test-client]))
 
 (defn- request-map-keys
   "Starts a server with the given config, makes a GET request, and returns
@@ -15,7 +16,8 @@
                     :headers {}
                     :body    (str (keys req))})
                  server-config)
-        response (client/get (format "http://localhost:%s/" (:port server-config)))
+        response (client/get (format "http://localhost:%s/" (:port server-config))
+                             {:client test-client/client})
         ks (edn/read-string (:body response))]
     (server/stop-http-server server)
     (set ks)))
@@ -54,7 +56,7 @@
                  {:host               "127.0.0.1"
                   :port               8086
                   :request-map-fields fields})
-        response (client/get "http://localhost:8086/")
+        response (client/get "http://localhost:8086/" {:client test-client/client})
         result (edn/read-string (:body response))]
     (is (= {:uri            "/"
             :scheme         :http
@@ -78,7 +80,7 @@
                  {:port               8086
                   :handler-mode       :async
                   :request-map-fields fields})
-        response (client/get "http://localhost:8086/")
+        response (client/get "http://localhost:8086/" {:client test-client/client})
         ks (set (edn/read-string (:body response)))]
     (is (= fields ks))
     (server/stop-http-server server)))

@@ -1,16 +1,16 @@
 (ns ring-http-exchange.core-test
   (:require
-    [clj-http.client :as client]
     [clojure.edn :as edn]
     [clojure.string :as string]
     [clojure.test :refer [are deftest is testing]]
+    [jj.potoroo.httpclient :as client]
     [ring-http-exchange.core :as server]
     [ring-http-exchange.ssl :as ssl]
     [ring-http-exchange.ssl-utils :as ssl-utils]
+    [ring-http-exchange.test-client :as test-client]
     [ring.core.protocols :as protocols])
-  (:import (java.io ByteArrayInputStream File OutputStream)
+  (:import (java.io ByteArrayInputStream File IOException OutputStream)
            (java.util.concurrent Executors)
-           (org.apache.http NoHttpResponseException)
            (sun.net.httpserver FixedLengthInputStream)))
 
 
@@ -40,17 +40,18 @@
                                       (if (:port server-config)
                                         (:port server-config)
                                         8080))
-                              {:insecure?        true
-                               :throw-exceptions false})]
+                              {:client (if (:ssl-context server-config)
+                                         test-client/insecure-client
+                                         test-client/client)})]
 
      (is (= (:status expected-responses) (:status response)))
      (is (= (:headers expected-responses)
             (->
               (:headers response)
-              (dissoc "Connection")
-              (dissoc "Date")
-              (dissoc "Content-length")
-              (dissoc "Transfer-encoding"))))
+              (dissoc "connection")
+              (dissoc "date")
+              (dissoc "content-length")
+              (dissoc "transfer-encoding"))))
      (is (= (:body expected-responses) (:body response)))
      (server/stop-http-server server))))
 
@@ -68,7 +69,7 @@
                          :body    nil}
         server-config {:port 8081}
         expected-response {:status  200
-                           :headers {"Content-type" "text/html; charset=utf-8"}
+                           :headers {"content-type" "text/html; charset=utf-8"}
                            :body    ""}]
     (verify-response server-response server-config expected-response)))
 
@@ -80,9 +81,9 @@
                                           :body    nil})
                                        {:port port})
         response (client/head (format "http://localhost:%s/" port)
-                              {:throw-exceptions false})]
+                              {:client test-client/client})]
     (is (= 200 (:status response)))
-    (is (nil? (:body response)))
+    (is (= "" (:body response)))
     (server/stop-http-server server)))
 
 (deftest can-override-http-port
@@ -91,7 +92,7 @@
                          :body    "hello world"}
         server-config {:port 8081}
         expected-response {:status  200
-                           :headers {"Content-type" "text/html; charset=utf-8"}
+                           :headers {"content-type" "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -102,7 +103,7 @@
         server-config {:port        6443
                        :ssl-context (ssl/keystore->ssl-context default-key-manager default-password)}
         expected-response {:status  200
-                           :headers {"Content-type" "text/html; charset=utf-8"}
+                           :headers {"content-type" "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -119,7 +120,7 @@
                                             default-password
                                             tls-version)}
               expected-response {:status  200
-                                 :headers {"Content-type" "text/html; charset=utf-8"}
+                                 :headers {"content-type" "text/html; charset=utf-8"}
                                  :body    "hello world"}]
           (verify-response server-response server-config expected-response))))))
 
@@ -130,7 +131,7 @@
         server-config {:port        6443
                        :ssl-context nil}
         expected-response {:status  200
-                           :headers {"Content-type" "text/html; charset=utf-8"}
+                           :headers {"content-type" "text/html; charset=utf-8"}
                            :body    "hello world"}]
     (verify-response server-response server-config expected-response)))
 
@@ -142,7 +143,8 @@
                                           :body    (.toString ^Thread (Thread/currentThread))})
                                        {:executor (Executors/newVirtualThreadPerTaskExecutor)
                                         :port     port})
-        response (client/get (format "http://localhost:%s/" port))]
+        response (client/get (format "http://localhost:%s/" port)
+                             {:client test-client/client})]
     (println (:body response))
     (is (= true (string/includes? (:body response) "VirtualThread")))
     (server/stop-http-server server)))
@@ -155,7 +157,8 @@
                                           :body    (.toString ^Thread (Thread/currentThread))})
                                        {
                                         :port port})
-        response (client/get (format "http://localhost:%s/" port))]
+        response (client/get (format "http://localhost:%s/" port)
+                             {:client test-client/client})]
     (is (= true (string/starts-with? (:body response) "VirtualThread")))
     (server/stop-http-server server)))
 
@@ -165,7 +168,7 @@
                          :body    (File. (str (cwd) "/test/resources/not-existing"))}
 
         expected-response {:status  404
-                           :headers {"Content-type" "text/html"}
+                           :headers {"content-type" "text/html"}
                            :body    "File Not Found"}]
     (verify-response-with-default-status server-response expected-response)))
 
@@ -176,7 +179,7 @@
                          :body    (.getBytes "hello world")}
 
         expected-response {:status  200
-                           :headers {"Content-type" "text/html; charset=utf-8"
+                           :headers {"content-type" "text/html; charset=utf-8"
                                      "header1" "header-value"}
                            :body    "hello world"}]
     (verify-response-with-default-status server-response expected-response)))
@@ -193,8 +196,9 @@
                                        {:executor (Executors/newVirtualThreadPerTaskExecutor)
                                         :port     port})
         response1 (client/get (format "http://localhost:%s/error" port)
-                              {:throw-exceptions false})
-        response2 (client/get (format "http://localhost:%s/" port))]
+                              {:client test-client/client})
+        response2 (client/get (format "http://localhost:%s/" port)
+                              {:client test-client/client})]
     (is (= 500 (:status response1)))
     (is (= "Internal Server Error" (:body response1)))
     (is (= 200 (:status response2)))
@@ -210,7 +214,8 @@
                                                           (dissoc req :body)
                                                           :headers (dissoc (:headers req) "User-agent")))})
                                        server-config)
-        response (client/get (format "http://localhost:%s/" (:port server-config)))]
+        response (client/get (format "http://localhost:%s/" (:port server-config))
+                             {:client test-client/client})]
     (is (= (:status response) 200))
     (is (= (clojure.edn/read-string (:body response)) expected-request-map))
     (server/stop-http-server server)))
@@ -221,9 +226,8 @@
         expected-request-map {
                               :protocol       "HTTP/1.1",
                               :remote-addr    "127.0.0.1",
-                              :headers        {"Accept-encoding" "gzip, deflate",
-                                               "Connection"      "close",
-                                               "Host"            "localhost:8085"},
+                              :headers        {"Content-length" "0",
+                                               "Host"           "localhost:8085"},
                               :server-port    8085, :uri "/",
                               :server-name    "127.0.0.1",
                               :query-string   nil,
@@ -234,9 +238,8 @@
 (deftest test-request-map-head-request
   (let [server-config {:host "localhost"
                        :port 8084}
-        expected-request-map {:headers        {"Accept-encoding" "gzip, deflate"
-                                               "Connection"      "close"
-                                               "Host"            "localhost:8084"}
+        expected-request-map {:headers        {"Content-length" "0"
+                                               "Host"           "localhost:8084"}
                               :protocol       "HTTP/1.1"
                               :query-string   nil
                               :remote-addr    "127.0.0.1"
@@ -251,11 +254,9 @@
   (let [server-config {:host "localhost"
                        :port 8083}
         expected-request-map {:body           "hello world"
-                              :headers        {"Accept-encoding" "gzip, deflate"
-                                               "Connection"      "close"
-                                               "Content-length"  "11"
-                                               "Content-type"    "text/plain; charset=UTF-8"
-                                               "Host"            "localhost:8083"}
+                              :headers        {"Content-length" "11"
+                                               "Content-type"   "text/plain; charset=UTF-8"
+                                               "Host"           "localhost:8083"}
                               :protocol       "HTTP/1.1"
                               :query-string   "q=query&s=string"
                               :remote-addr    "127.0.0.1"
@@ -272,7 +273,10 @@
                                                             :body (String. (.readAllBytes ^FixedLengthInputStream (:body req)))
                                                             :headers (dissoc (:headers req) "User-agent")))})
                                          server-config)
-          response (client/put (format "http://localhost:%s/hello-world?q=query&s=string" (:port server-config)) {:body "hello world"})]
+          response (client/put (format "http://localhost:%s/hello-world?q=query&s=string" (:port server-config))
+                               {:client  test-client/client
+                                :headers {"content-type" "text/plain; charset=UTF-8"}
+                                :body    "hello world"})]
       (is (= (:status response) 200))
       (is (= expected-request-map (edn/read-string (:body response))))
       (server/stop-http-server server))))
@@ -285,7 +289,7 @@
                          :body    1}
 
         expected-response {:status  500
-                           :headers {"Content-type" "text/html"}
+                           :headers {"content-type" "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
 
@@ -293,7 +297,7 @@
 (deftest respose-nil-returns-500-internal-server-error
   (let [server-response nil
         expected-response {:status  500
-                           :headers {"Content-type" "text/html"}
+                           :headers {"content-type" "text/html"}
                            :body    "Internal Server Error"}]
     (verify-response server-response expected-response)))
 
@@ -320,7 +324,7 @@
                           (File. (str (cwd) "/test/resources/helloworld")))]
     (doseq [response-body response-bodies]
       (let [server-response {:body response-body :status 201 :headers {"Content-type" "text/html; charset=utf-8"}}
-            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+            expected-response {:headers {"content-type" "text/html; charset=utf-8"}
                                :status  201
                                :body    "Hello world"}]
 
@@ -338,7 +342,7 @@
 
     (doseq [response-body response-bodies]
       (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
-            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+            expected-response {:headers {"content-type" "text/html; charset=utf-8"}
                                :status  200
                                :body    "Hello world"}]
 
@@ -357,7 +361,7 @@
 
     (doseq [response-body response-bodies]
       (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
-            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+            expected-response {:headers {"content-type" "text/html; charset=utf-8"}
                                :status  200
                                :body    "Hello world"}]
 
@@ -375,7 +379,7 @@
 
     (let [server-response (Response. response-body {"Content-type" "text/html; charset=utf-8"} 200)
           expected-response {:status  200
-                             :headers {"Content-type" "text/html; charset=utf-8"}
+                             :headers {"content-type" "text/html; charset=utf-8"}
                              :body    "Hello world"}]
 
       (verify-response server-response {:record-support? true} expected-response))))
@@ -401,11 +405,12 @@
                               (if (:port server-config)
                                 (:port server-config)
                                 8080))
-                      {:insecure?        true
-                       :throw-exceptions true})
+                      {:client (if (:ssl-context server-config)
+                                 test-client/insecure-client
+                                 test-client/client)})
           (is (= -1 -2) " Should fail")
           (catch Exception e
-            (is (instance? NoHttpResponseException e))))
+            (is (instance? IOException e))))
         (server/stop-http-server server)))))
 
 (deftest supports-utf8
@@ -416,7 +421,7 @@
 
     (doseq [response-body response-bodies]
       (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
-            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+            expected-response {:headers {"content-type" "text/html; charset=utf-8"}
                                :status  200
                                :body    "るまのせき"}]
 
@@ -433,7 +438,7 @@
 
     (doseq [response-body response-bodies]
       (let [server-response {:body response-body :headers {"Content-type" "text/html; charset=utf-8"}}
-            expected-response {:headers {"Content-type" "text/html; charset=utf-8"}
+            expected-response {:headers {"content-type" "text/html; charset=utf-8"}
                                :status  200
                                :body    "Hello world"}]
 
@@ -449,11 +454,13 @@
         server-config {:executor (Executors/newVirtualThreadPerTaskExecutor)
                        :port     port}
         server (server/run-http-server handler server-config)
-        response (client/get (format "http://localhost:%s/" port))]
+        response (client/get (format "http://localhost:%s/" port)
+                             {:client test-client/client})]
     (is (= 200 (:status response)))
     (let [new-server (server/restart-http-server server handler server-config)
-          response-after-restart (client/get (format "http://localhost:%s/" port))]
-      (client/get (format "http://localhost:%s/" port))
+          response-after-restart (client/get (format "http://localhost:%s/" port)
+                                             {:client test-client/client})]
+      (client/get (format "http://localhost:%s/" port) {:client test-client/client})
       (is (= 200 (:status response-after-restart)))
       (server/stop-http-server new-server))))
 
@@ -482,7 +489,7 @@
                              :body    "async-compat"}))
                  {:port   8086
                   :async? true})
-        response (client/get "http://localhost:8086/")]
+        response (client/get "http://localhost:8086/" {:client test-client/client})]
     (is (= 200 (:status response)))
     (is (= "async-compat" (:body response)))
     (server/stop-http-server server)))
@@ -496,7 +503,7 @@
                  {:port         8086
                   :async?       true
                   :handler-mode :sync})
-        response (client/get "http://localhost:8086/")]
+        response (client/get "http://localhost:8086/" {:client test-client/client})]
     (is (= 200 (:status response)))
     (is (= "sync-wins" (:body response)))
     (server/stop-http-server server)))
