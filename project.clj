@@ -1,4 +1,4 @@
-(defproject org.clojars.jj/ring-http-exchange "1.4.10-SNAPSHOT"
+(defproject org.clojars.jj/ring-http-exchange "1.4.10"
   :description "Ring adapter for com.sun.net.httpserver"
   :url "https://github.com/ruroru/ring-http-exchange"
   :license {:name "Eclipse Public License"
@@ -11,7 +11,8 @@
 
   :deploy-repositories [["clojars" {:url      "https://repo.clojars.org"
                                     :username :env/clojars_user
-                                    :password :env/clojars_pass}]]
+                                    :password :env/clojars_pass
+                                    :sign-releases false}]]
 
   :profiles {:robaho {:dependencies [[io.github.robaho/httpserver "1.0.29"]]}
              :test {:resource-paths ["test/resources"]
