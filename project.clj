@@ -5,7 +5,7 @@
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.12.6"]
                  [org.clojure/tools.logging "1.3.1"]
-                 [org.ring-clojure/ring-core-protocols "1.15.5"]]
+                 [org.ring-clojure/ring-core-protocols "1.15.6"]]
 
   :source-paths ["src/clojure"]
 
