@@ -18,7 +18,7 @@
              :test {:resource-paths ["test/resources"]
                     :source-paths   ["test/clojure"]
                     :dependencies   [[org.clojars.jj/potoroo "0.1.0"]
-                                     [org.bouncycastle/bcprov-jdk18on "1.86"]
+                                     [org.bouncycastle/bcprov-jdk18on "1.87"]
                                      [org.bouncycastle/bcpkix-jdk18on "1.87"]
                                      [mock-clj "0.2.1"]]}}
 
